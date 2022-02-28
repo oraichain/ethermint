@@ -126,7 +126,7 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 
 	if !ok && account.IsContract() {
 		if baseAcct, isBaseAccount := acct.(*authtypes.BaseAccount); isBaseAccount {
-			ethAcct = &ethermint.EthAccount{
+			acct = &ethermint.EthAccount{
 				BaseAccount: baseAcct,
 				CodeHash:    codeHash.Hex(),
 			}
