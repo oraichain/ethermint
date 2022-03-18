@@ -32,7 +32,7 @@ func (suite AnteTestSuite) TestEthSigVerificationDecorator() {
 		reCheckTx bool
 		expPass   bool
 	}{
-		{"ReCheckTx", nil, true, false},
+		{"ReCheckTx", &invalidTx{}, true, false},
 		{"invalid transaction type", &invalidTx{}, false, false},
 		{
 			"invalid sender",
@@ -145,7 +145,8 @@ func (suite AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 }
 
 func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
-	dec := ante.NewEthNonceVerificationDecorator(suite.app.AccountKeeper)
+	suite.SetupTest()
+	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper)
 
 	addr := tests.GenerateAddress()
 
@@ -159,7 +160,7 @@ func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
 		reCheckTx bool
 		expPass   bool
 	}{
-		{"ReCheckTx", nil, func() {}, true, true},
+		{"ReCheckTx", &invalidTx{}, func() {}, true, false},
 		{"invalid transaction type", &invalidTx{}, func() {}, false, false},
 		{"sender account not found", tx, func() {}, false, false},
 		{
@@ -204,10 +205,12 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 
 	addr := tests.GenerateAddress()
 
-	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
+	txGasLimit := uint64(1000)
+	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), txGasLimit, big.NewInt(1), nil, nil, nil, nil)
 	tx.From = addr.Hex()
 
-	tx2 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000000, big.NewInt(1), nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
+	tx2GasLimit := uint64(1000000)
+	tx2 := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), tx2GasLimit, big.NewInt(1), nil, nil, nil, &ethtypes.AccessList{{Address: addr, StorageKeys: nil}})
 	tx2.From = addr.Hex()
 
 	var vmdb *statedb.StateDB
@@ -215,32 +218,37 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 	testCases := []struct {
 		name     string
 		tx       sdk.Tx
+		gasLimit uint64
 		malleate func()
 		expPass  bool
 		expPanic bool
 	}{
-		{"invalid transaction type", &invalidTx{}, func() {}, false, false},
+		{"invalid transaction type", &invalidTx{}, 0, func() {}, false, false},
 		{
 			"sender not found",
 			evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
+			0,
 			func() {},
 			false, false,
 		},
 		{
 			"gas limit too low",
 			tx,
+			0,
 			func() {},
 			false, false,
 		},
 		{
 			"not enough balance for fees",
 			tx2,
+			0,
 			func() {},
 			false, false,
 		},
 		{
 			"not enough tx gas",
 			tx2,
+			0,
 			func() {
 				vmdb.AddBalance(addr, big.NewInt(1000000))
 			},
@@ -249,6 +257,7 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 		{
 			"not enough block gas",
 			tx2,
+			0,
 			func() {
 				vmdb.AddBalance(addr, big.NewInt(1000000))
 
@@ -259,6 +268,7 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 		{
 			"success",
 			tx2,
+			tx2GasLimit,
 			func() {
 				vmdb.AddBalance(addr, big.NewInt(1000000))
 
@@ -281,18 +291,19 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 				return
 			}
 
-			_, err := dec.AnteHandle(suite.ctx.WithIsCheckTx(true), tc.tx, false, nextFn)
+			ctx, err := dec.AnteHandle(suite.ctx.WithIsCheckTx(true).WithGasMeter(sdk.NewInfiniteGasMeter()), tc.tx, false, nextFn)
 			if tc.expPass {
 				suite.Require().NoError(err)
 			} else {
 				suite.Require().Error(err)
 			}
+			suite.Require().Equal(tc.gasLimit, ctx.GasMeter().Limit())
 		})
 	}
 }
 
 func (suite AnteTestSuite) TestCanTransferDecorator() {
-	dec := ante.NewCanTransferDecorator(suite.app.EvmKeeper, suite.app.FeeMarketKeeper)
+	dec := ante.NewCanTransferDecorator(suite.app.EvmKeeper)
 
 	addr, privKey := tests.NewAddrKey()
 
@@ -406,13 +417,13 @@ func (suite AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 			"invalid transaction type",
 			&invalidTx{},
 			func() {},
-			false, true,
+			false, false,
 		},
 		{
 			"no signers",
 			evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 1, &to, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil),
 			func() {},
-			false, true,
+			false, false,
 		},
 		{
 			"account not set to store",
@@ -467,7 +478,7 @@ func (suite AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 }
 
 func (suite AnteTestSuite) TestEthSetupContextDecorator() {
-	dec := ante.NewEthSetUpContextDecorator()
+	dec := ante.NewEthSetUpContextDecorator(suite.app.EvmKeeper)
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
 
 	testCases := []struct {

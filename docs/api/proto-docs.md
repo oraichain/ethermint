@@ -179,6 +179,8 @@ instead of *big.Int.
 | `muir_glacier_block` | [string](#string) |  | Eip-2384 (bomb delay) switch block (nil no fork, 0 = already activated) |
 | `berlin_block` | [string](#string) |  | Berlin switch block (nil = no fork, 0 = already on berlin) |
 | `london_block` | [string](#string) |  | London switch block (nil = no fork, 0 = already on london) |
+| `arrow_glacier_block` | [string](#string) |  | Eip-4345 (bomb delay) switch block (nil = no fork, 0 = already activated) |
+| `merge_fork_block` | [string](#string) |  | EIP-3675 (TheMerge) switch block (nil = no fork, 0 = already in merge proceedings) |
 
 
 
@@ -921,8 +923,8 @@ Params defines the EVM module parameters
 | `no_base_fee` | [bool](#bool) |  | no base fee forces the EIP-1559 base fee to 0 (needed for 0 price calls) |
 | `base_fee_change_denominator` | [uint32](#uint32) |  | base fee change denominator bounds the amount the base fee can change between blocks. |
 | `elasticity_multiplier` | [uint32](#uint32) |  | elasticity multiplier bounds the maximum gas limit an EIP-1559 block may have. |
-| `initial_base_fee` | [int64](#int64) |  | initial base fee for EIP-1559 blocks. |
 | `enable_height` | [int64](#int64) |  | height at which the base fee calculation is enabled. |
+| `base_fee` | [string](#string) |  | base fee for EIP-1559 blocks. |
 
 
 
@@ -954,7 +956,6 @@ GenesisState defines the feemarket module's genesis state.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `params` | [Params](#ethermint.feemarket.v1.Params) |  | params defines all the paramaters of the module. |
-| `base_fee` | [string](#string) |  | base fee is the exported value from previous software version. Zero by default. |
 | `block_gas` | [uint64](#uint64) |  | block gas is the amount of gas used on the last block before the upgrade. Zero by default. |
 
 

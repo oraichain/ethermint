@@ -9,7 +9,7 @@ const DefaultConfigTemplate = `
 [evm]
 
 # Tracer defines the 'vm.Tracer' type that the EVM will use when the node is run in
-# debug mode. To enable tracing use the '--trace' flag when starting your node.
+# debug mode. To enable tracing use the '--evm.tracer' flag when starting your node.
 # Valid types are: json|struct|access_list|markdown
 tracer = "{{ .EVM.Tracer }}"
 
@@ -52,6 +52,12 @@ logs-cap = {{ .JSONRPC.LogsCap }}
 
 # BlockRangeCap defines the max block range allowed for 'eth_getLogs' query.
 block-range-cap = {{ .JSONRPC.BlockRangeCap }}
+
+# HTTPTimeout is the read/write timeout of http json-rpc server.
+http-timeout = "{{ .JSONRPC.HTTPTimeout }}"
+
+# HTTPIdleTimeout is the idle timeout of http json-rpc server.
+http-idle-timeout = "{{ .JSONRPC.HTTPIdleTimeout }}"
 
 ###############################################################################
 ###                             TLS Configuration                           ###
