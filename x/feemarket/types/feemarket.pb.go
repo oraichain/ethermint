@@ -36,6 +36,7 @@ type Params struct {
 	ElasticityMultiplier uint32 `protobuf:"varint,3,opt,name=elasticity_multiplier,json=elasticityMultiplier,proto3" json:"elasticity_multiplier,omitempty"`
 	// height at which the base fee calculation is enabled.
 	EnableHeight int64 `protobuf:"varint,5,opt,name=enable_height,json=enableHeight,proto3" json:"enable_height,omitempty"`
+	InitialBaseFee int64 `protobuf:"varint,4,opt,name=initial_base_fee,json=initialBaseFee,proto3" json:"initial_base_fee,omitempty"`
 	// base fee for EIP-1559 blocks.
 	BaseFee github_com_cosmos_cosmos_sdk_types.Int `protobuf:"bytes,6,opt,name=base_fee,json=baseFee,proto3,customtype=github.com/cosmos/cosmos-sdk/types.Int" json:"base_fee"`
 }
