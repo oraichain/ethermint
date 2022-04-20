@@ -36,7 +36,35 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 # Changelog
 
-## [v0.10.0] - 2022-01-07
+## [v0.14.0] - 2022-04-19
+
+### API Breaking
+
+* (evm) [tharsis#1051](https://github.com/tharsis/ethermint/pull/1051) Context block height fix on TraceTx. Removes `tx_index` on `QueryTraceTxRequest` proto type.
+
+### Improvements
+
+* (deps) [tharsis#1046](https://github.com/tharsis/ethermint/pull/1046) Bump Cosmos SDK version to [`v0.45.3`](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.45.3)
+* (rpc) [tharsis#1056](https://github.com/tharsis/ethermint/pull/1056) Make json-rpc namespaces extensible
+
+### Bug Fixes
+
+* (rpc) [tharsis#1050](https://github.com/tharsis/ethermint/pull/1050) `eth_getBlockByNumber` fix on batch transactions
+* (app) [tharsis#658](https://github.com/tharsis/ethermint/issues/658) Support simulations for the EVM.
+
+## [v0.13.0] - 2022-04-05
+
+### API Breaking
+
+* (evm) [tharsis#1027](https://github.com/tharsis/ethermint/pull/1027) Change the `PostTxProcessing` hook interface to include the full message data.
+* (feemarket) [tharsis#1026](https://github.com/tharsis/ethermint/pull/1026) Fix REST endpoints to use `/ethermint/feemarket/*` instead of `/feemarket/evm/*`.
+
+### Improvements
+
+* (deps) [tharsis#1029](https://github.com/tharsis/ethermint/pull/1029) Bump Cosmos SDK version to [`v0.45.2`](https://github.com/cosmos/cosmos-sdk/releases/tag/v0.45.2)
+* (evm) [tharsis#1025](https://github.com/tharsis/ethermint/pull/1025) Allow to append logs after a post processing hook.
+
+## [v0.12.2] - 2022-03-30
 
 ### Bug Fixes
 
