@@ -1,11 +1,11 @@
 package ante_test
 
 import (
-	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 	"math/big"
 	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	ethparams "github.com/ethereum/go-ethereum/params"
@@ -43,7 +43,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					1,
 					big.NewInt(10),
 					100000,
-					big.NewInt(150),
+					MinimumGasPrice.Mul(sdk.NewInt(15)).BigInt(),
 					big.NewInt(200),
 					nil,
 					nil,
@@ -64,7 +64,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					2,
 					big.NewInt(10),
 					100000,
-					big.NewInt(150),
+					MinimumGasPrice.Mul(sdk.NewInt(15)).BigInt(),
 					big.NewInt(200),
 					nil,
 					nil,
@@ -85,7 +85,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					3,
 					big.NewInt(10),
 					100000,
-					big.NewInt(150),
+					MinimumGasPrice.Mul(sdk.NewInt(15)).BigInt(),
 					big.NewInt(200),
 					nil,
 					nil,
@@ -107,7 +107,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					&to,
 					big.NewInt(10),
 					100000,
-					big.NewInt(150),
+					MinimumGasPrice.Mul(sdk.NewInt(15)).BigInt(),
 					big.NewInt(200),
 					nil,
 					nil,
@@ -129,7 +129,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					&to,
 					big.NewInt(10),
 					100000,
-					big.NewInt(150),
+					MinimumGasPrice.Mul(sdk.NewInt(15)).BigInt(),
 					big.NewInt(200),
 					nil,
 					nil,
@@ -151,7 +151,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					&to,
 					big.NewInt(10),
 					100000,
-					big.NewInt(150),
+					MinimumGasPrice.Mul(sdk.NewInt(15)).BigInt(),
 					big.NewInt(200),
 					nil,
 					nil,
@@ -172,7 +172,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 					&to,
 					big.NewInt(10),
 					100000,
-					big.NewInt(150),
+					MinimumGasPrice.Mul(sdk.NewInt(15)).BigInt(),
 					big.NewInt(200),
 					nil,
 					nil,
@@ -185,9 +185,19 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			}, false, true, true,
 		},
 		{
+			"fail - CheckTx (gas price under minimum)",
+			func() sdk.Tx {
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 8, &to, big.NewInt(10), 100000, MinimumGasPrice.Sub(sdk.NewInt(1)).BigInt(), nil, nil, nil, nil)
+				signedTx.From = addr.Hex()
+
+				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
+				return txBuilder.GetTx()
+			}, true, false, false,
+		},
+		{
 			"fail - CheckTx (cosmos tx is not valid)",
 			func() sdk.Tx {
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 8, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 8, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
@@ -199,7 +209,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 		{
 			"fail - CheckTx (memo too long)",
 			func() sdk.Tx {
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 5, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 5, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
@@ -210,7 +220,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 		{
 			"fail - CheckTx (ExtensionOptionsEthereumTx not set)",
 			func() sdk.Tx {
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 5, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), 5, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false, true)
@@ -224,7 +234,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			func() sdk.Tx {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				tx := suite.CreateTestTx(signedTx, privKey, 1, true)
@@ -236,7 +246,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			func() sdk.Tx {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
@@ -249,7 +259,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			func() sdk.Tx {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
@@ -262,7 +272,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			func() sdk.Tx {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
@@ -282,7 +292,7 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			func() sdk.Tx {
 				nonce, err := suite.app.AccountKeeper.GetSequence(suite.ctx, acc.GetAddress())
 				suite.Require().NoError(err)
-				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, big.NewInt(1), nil, nil, nil, nil)
+				signedTx := evmtypes.NewTx(suite.app.EvmKeeper.ChainID(), nonce, &to, big.NewInt(10), 100000, MinimumGasPrice.BigInt(), nil, nil, nil, nil)
 				signedTx.From = addr.Hex()
 
 				txBuilder := suite.CreateTestTxBuilder(signedTx, privKey, 1, false)
