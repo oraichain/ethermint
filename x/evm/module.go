@@ -44,6 +44,9 @@ var (
 	_ module.AppModuleBasic = AppModuleBasic{}
 )
 
+// ConsensusVersion defines the current module consensus version.
+const ConsensusVersion = 2
+
 // AppModuleBasic defines the basic application module used by the evm module.
 type AppModuleBasic struct{}
 

@@ -1,18 +1,3 @@
-// Copyright 2021 Evmos Foundation
-// This file is part of Evmos' Ethermint library.
-//
-// The Ethermint library is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// The Ethermint library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
 package types
 
 import (
@@ -22,46 +7,48 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/evmos/ethermint/types"
 )
 
-var (
-	// DefaultEVMDenom defines the default EVM denomination on Ethermint
+var _ paramtypes.ParamSet = &Params{}
+
+const (
 	DefaultEVMDenom = types.AttoPhoton
-	// DefaultAllowUnprotectedTxs rejects all unprotected txs (i.e false)
-	DefaultAllowUnprotectedTxs = false
-	// DefaultEnableCreate enables contract creation (i.e true)
-	DefaultEnableCreate = true
-	// DefaultEnableCall enables contract calls (i.e true)
-	DefaultEnableCall = true
 )
 
-// AvailableExtraEIPs define the list of all EIPs that can be enabled by the
-// EVM interpreter. These EIPs are applied in order and can override the
-// instruction sets from the latest hard fork enabled by the ChainConfig. For
-// more info check:
-// https://github.com/ethereum/go-ethereum/blob/master/core/vm/interpreter.go#L97
-var AvailableExtraEIPs = []int64{1344, 1884, 2200, 2929, 3198, 3529}
+// Parameter keys
+var (
+	ParamStoreKeyEVMDenom          = []byte("EVMDenom")
+	ParamStoreKeyEnableCreate      = []byte("EnableCreate")
+	ParamStoreKeyEnableCall        = []byte("EnableCall")
+	ParamStoreKeyExtraEIPs         = []byte("EnableExtraEIPs")
+	ParamStoreKeyChainConfig       = []byte("ChainConfig")
+	ParamStoreKeyEIP712AllowedMsgs = []byte("EIP712AllowedMsgs")
+
+	// AvailableExtraEIPs define the list of all EIPs that can be enabled by the
+	// EVM interpreter. These EIPs are applied in order and can override the
+	// instruction sets from the latest hard fork enabled by the ChainConfig. For
+	// more info check:
+	// https://github.com/ethereum/go-ethereum/blob/master/core/vm/interpreter.go#L97
+	AvailableExtraEIPs = []int64{1344, 1884, 2200, 2929, 3198, 3529}
+)
+
+// ParamKeyTable returns the parameter key table.
+func ParamKeyTable() paramtypes.KeyTable {
+	return paramtypes.NewKeyTable().RegisterParamSet(&Params{})
+}
 
 // NewParams creates a new Params instance
-func NewParams(
-	evmDenom string,
-	allowUnprotectedTxs,
-	enableCreate,
-	enableCall bool,
-	config ChainConfig,
-	extraEIPs []int64,
-	eip712AllowedMsgs []EIP712AllowedMsg,
-) Params {
+func NewParams(evmDenom string, enableCreate, enableCall bool, config ChainConfig, extraEIPs ...int64) Params {
 	return Params{
-		EvmDenom:            evmDenom,
-		AllowUnprotectedTxs: allowUnprotectedTxs,
-		EnableCreate:        enableCreate,
-		EnableCall:          enableCall,
-		ExtraEIPs:           extraEIPs,
-		ChainConfig:         config,
-		EIP712AllowedMsgs:   eip712AllowedMsgs,
+		EvmDenom:          evmDenom,
+		EnableCreate:      enableCreate,
+		EnableCall:        enableCall,
+		ExtraEIPs:         extraEIPs,
+		ChainConfig:       config,
+		EIP712AllowedMsgs: []EIP712AllowedMsg{},
 	}
 }
 
@@ -69,19 +56,30 @@ func NewParams(
 // ExtraEIPs is empty to prevent overriding the latest hard fork instruction set
 func DefaultParams() Params {
 	return Params{
-		EvmDenom:            DefaultEVMDenom,
-		EnableCreate:        DefaultEnableCreate,
-		EnableCall:          DefaultEnableCall,
-		ChainConfig:         DefaultChainConfig(),
-		ExtraEIPs:           nil,
-		AllowUnprotectedTxs: DefaultAllowUnprotectedTxs,
-		EIP712AllowedMsgs:   []EIP712AllowedMsg{},
+		EvmDenom:          DefaultEVMDenom,
+		EnableCreate:      true,
+		EnableCall:        true,
+		ChainConfig:       DefaultChainConfig(),
+		ExtraEIPs:         nil,
+		EIP712AllowedMsgs: []EIP712AllowedMsg{},
+	}
+}
+
+// ParamSetPairs returns the parameter set pairs.
+func (p *Params) ParamSetPairs() paramtypes.ParamSetPairs {
+	return paramtypes.ParamSetPairs{
+		paramtypes.NewParamSetPair(ParamStoreKeyEVMDenom, &p.EvmDenom, validateEVMDenom),
+		paramtypes.NewParamSetPair(ParamStoreKeyEnableCreate, &p.EnableCreate, validateBool),
+		paramtypes.NewParamSetPair(ParamStoreKeyEnableCall, &p.EnableCall, validateBool),
+		paramtypes.NewParamSetPair(ParamStoreKeyExtraEIPs, &p.ExtraEIPs, validateEIPs),
+		paramtypes.NewParamSetPair(ParamStoreKeyChainConfig, &p.ChainConfig, validateChainConfig),
+		paramtypes.NewParamSetPair(ParamStoreKeyEIP712AllowedMsgs, &p.EIP712AllowedMsgs, validateEIP712AllowedMsgs),
 	}
 }
 
 // Validate performs basic validation on evm parameters.
 func (p Params) Validate() error {
-	if err := validateEVMDenom(p.EvmDenom); err != nil {
+	if err := sdk.ValidateDenom(p.EvmDenom); err != nil {
 		return err
 	}
 
@@ -89,19 +87,7 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	if err := validateBool(p.EnableCall); err != nil {
-		return err
-	}
-
-	if err := validateBool(p.EnableCreate); err != nil {
-		return err
-	}
-
-	if err := validateBool(p.AllowUnprotectedTxs); err != nil {
-		return err
-	}
-
-	if err := validateChainConfig(p.ChainConfig); err != nil {
+	if err := p.ChainConfig.Validate(); err != nil {
 		return err
 	}
 
@@ -118,7 +104,7 @@ func (p Params) EIP712AllowedMsgFromMsgType(msgTypeUrl string) *EIP712AllowedMsg
 	return nil
 }
 
-// EIPs returns the ExtraEIPS as a int slice
+// EIPs returns the ExtraEips as a int slice
 func (p Params) EIPs() []int {
 	eips := make([]int, len(p.ExtraEIPs))
 	for i, eip := range p.ExtraEIPs {
