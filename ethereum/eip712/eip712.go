@@ -41,7 +41,7 @@ func ComputeTypedDataHash(typedData apitypes.TypedData) ([]byte, error) {
 func WrapTxToTypedData(
 	cdc codectypes.AnyUnpacker,
 	chainID uint64,
-	msg sdk.Msg,
+	msgs []sdk.Msg,
 	data []byte,
 	feeDelegation *FeeDelegationOptions,
 ) (apitypes.TypedData, error) {
@@ -52,14 +52,14 @@ func WrapTxToTypedData(
 	}
 
 	domain := apitypes.TypedDataDomain{
-		Name:              "Cosmos Web3",
+		Name:              "Kava Cosmos",
 		Version:           "1.0.0",
 		ChainId:           math.NewHexOrDecimal256(int64(chainID)),
-		VerifyingContract: "cosmos",
+		VerifyingContract: "kavaCosmos",
 		Salt:              "0",
 	}
 
-	msgTypes, err := extractMsgTypes(cdc, "MsgValue", msg)
+	msgTypes, err := extractMsgTypes(cdc, msgs)
 	if err != nil {
 		return apitypes.TypedData{}, err
 	}
@@ -94,7 +94,7 @@ type FeeDelegationOptions struct {
 	FeePayer sdk.AccAddress
 }
 
-func extractMsgTypes(cdc codectypes.AnyUnpacker, msgTypeName string, msg sdk.Msg) (apitypes.Types, error) {
+func extractMsgTypes(cdc codectypes.AnyUnpacker, msgs []sdk.Msg) (apitypes.Types, error) {
 	rootTypes := apitypes.Types{
 		"EIP712Domain": {
 			{
@@ -123,7 +123,6 @@ func extractMsgTypes(cdc codectypes.AnyUnpacker, msgTypeName string, msg sdk.Msg
 			{Name: "chain_id", Type: "string"},
 			{Name: "fee", Type: "Fee"},
 			{Name: "memo", Type: "string"},
-			{Name: "msgs", Type: "Msg[]"},
 			{Name: "sequence", Type: "string"},
 			// Note timeout_height was removed because it was not getting filled with the legacyTx
 			// {Name: "timeout_height", Type: "string"},
@@ -136,17 +135,28 @@ func extractMsgTypes(cdc codectypes.AnyUnpacker, msgTypeName string, msg sdk.Msg
 			{Name: "denom", Type: "string"},
 			{Name: "amount", Type: "string"},
 		},
-		"Msg": {
+	}
+
+	// Add definitions for all messages
+	for i := 0; i < len(msgs); i++ {
+		msgTypeName := fmt.Sprintf("Msg%d", i+1)
+		msgAttrName := fmt.Sprintf("message%d", i+1)
+		msgValName := fmt.Sprintf("MsgValue%d", i+1)
+
+		// Add message to Tx type
+		rootTypes["Tx"] = append(rootTypes["Tx"], apitypes.Type{Name: msgAttrName, Type: msgTypeName})
+
+		// Add message type
+		rootTypes[msgTypeName] = []apitypes.Type{
 			{Name: "type", Type: "string"},
-			{Name: "value", Type: msgTypeName},
-		},
-		msgTypeName: {},
-	}
+			{Name: "value", Type: msgValName},
+		}
 
-	if err := walkFields(cdc, rootTypes, msgTypeName, msg); err != nil {
-		return nil, err
+		// Add message value type
+		if err := walkFields(cdc, rootTypes, msgValName, msgs[i]); err != nil {
+			return nil, err
+		}
 	}
-
 	return rootTypes, nil
 }
 
