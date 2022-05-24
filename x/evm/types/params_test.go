@@ -47,8 +47,25 @@ func TestParamsValidate(t *testing.T) {
 		},
 		{
 			"invalid chain config",
-			NewParams("ara", true, true, ChainConfig{}, 2929, 1884, 1344),
-			false,
+			NewParams("ara", true, true, ChainConfig{
+				HomesteadBlock: newIntPtr(-1),
+			}, 2929, 1884, 1344),
+			true,
+		},
+		{
+			"invalid eip712 allowed msgs",
+			Params{
+				EvmDenom:     "ara",
+				EnableCreate: true,
+				EnableCall:   true,
+				ChainConfig:  DefaultChainConfig(),
+				ExtraEIPs:    []int64{2929, 1884, 1344},
+				EIP712AllowedMsgs: []EIP712AllowedMsg{
+					{LegacyMsgType: "send"},
+					{LegacyMsgType: "send"},
+				},
+			},
+			true,
 		},
 	}
 
