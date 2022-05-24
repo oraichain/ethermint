@@ -26,6 +26,30 @@ func (suite AnteTestSuite) TestAnteHandler() {
 
 	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, big.NewInt(10000000000))
 
+	// allow send & delegate msg via eip712
+	params := suite.app.EvmKeeper.GetParams(suite.ctx)
+	params.EIP712AllowedMsgs = []evmtypes.EIP712AllowedMsg{
+		{
+			MsgTypeUrl:       "/cosmos.bank.v1beta1.MsgSend",
+			MsgValueTypeName: "MsgValueSend",
+			ValueTypes: []evmtypes.EIP712MsgAttrType{
+				{Name: "from_address", Type: "string"},
+				{Name: "to_address", Type: "string"},
+				{Name: "amount", Type: "Coin[]"},
+			},
+		},
+		{
+			MsgTypeUrl:       "/cosmos.staking.v1beta1.MsgDelegate",
+			MsgValueTypeName: "MsgValueDelegate",
+			ValueTypes: []evmtypes.EIP712MsgAttrType{
+				{Name: "delegator_address", Type: "string"},
+				{Name: "validator_address", Type: "string"},
+				{Name: "amount", Type: "Coin"},
+			},
+		},
+	}
+	suite.app.EvmKeeper.SetParams(suite.ctx, params)
+
 	suite.app.FeeMarketKeeper.SetBaseFee(suite.ctx, big.NewInt(100))
 
 	testCases := []struct {
@@ -321,6 +345,17 @@ func (suite AnteTestSuite) TestAnteHandler() {
 				amount := sdk.NewCoins(coinAmount)
 				gas := uint64(200000)
 				txBuilder := suite.CreateTestEIP712TxBuilderMsgDelegate(from, privKey, "ethermint_9000-1", gas, amount)
+				return txBuilder.GetTx()
+			}, false, false, true,
+		},
+		{
+			"success - DeliverTx EIP712 signed Cosmos Tx with multiple messages",
+			func() sdk.Tx {
+				from := acc.GetAddress()
+				coinAmount := sdk.NewCoin(evmtypes.DefaultEVMDenom, sdk.NewInt(20))
+				amount := sdk.NewCoins(coinAmount)
+				gas := uint64(200000)
+				txBuilder := suite.CreateTestEIP712TxBuilderMultipleMsgs(from, privKey, "ethermint_9000-1", gas, amount)
 				return txBuilder.GetTx()
 			}, false, false, true,
 		},
