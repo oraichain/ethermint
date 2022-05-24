@@ -30,6 +30,9 @@ var (
 	_ module.AppModuleBasic = AppModuleBasic{}
 )
 
+// ConsensusVersion defines the current module consensus version.
+const ConsensusVersion = 2
+
 // AppModuleBasic defines the basic application module used by the evm module.
 type AppModuleBasic struct{}
 
@@ -44,7 +47,7 @@ func (AppModuleBasic) RegisterLegacyAminoCodec(_ *codec.LegacyAmino) {
 
 // ConsensusVersion returns the consensus state-breaking version for the module.
 func (AppModuleBasic) ConsensusVersion() uint64 {
-	return 1
+	return ConsensusVersion
 }
 
 // DefaultGenesis returns default genesis state as raw bytes for the evm
@@ -123,7 +126,10 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), am.keeper)
 	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
 
-	_ = keeper.NewMigrator(*am.keeper)
+	m := keeper.NewMigrator(*am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to migrate x/committee from version 1 to 2: %v", err))
+	}
 }
 
 // Route returns the message routing key for the evm module.
