@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 )
@@ -23,4 +24,9 @@ func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 		(*ExtensionOptionsWeb3TxI)(nil),
 		&ExtensionOptionsWeb3Tx{},
 	)
+}
+
+// RegisterLegacyAminoCodec registers the tendermint concrete client-related implmentations and interfaces
+func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
+	cdc.RegisterConcrete(&EthAccount{}, "ethermint/EthAccount", nil)
 }
