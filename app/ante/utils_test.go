@@ -233,7 +233,7 @@ func (suite *AnteTestSuite) CreateTestEIP712TxBuilderMultipleMsgs(from sdk.AccAd
 	recipient := sdk.AccAddress(common.Address{}.Bytes())
 	msgSend := types2.NewMsgSend(from, recipient, sdk.NewCoins(sdk.NewCoin(evmtypes.DefaultEVMDenom, sdk.NewInt(1))))
 	msgDelegate := types3.NewMsgDelegate(from, valAddr, sdk.NewCoin(evmtypes.DefaultEVMDenom, sdk.NewInt(20)))
-	return suite.CreateTestEIP712CosmosTxBuilder(from, priv, chainId, gas, gasAmount, []sdk.Msg{msgSend, msgDelegate})
+	return suite.CreateTestEIP712CosmosTxBuilder(from, priv, chainId, gas, gasAmount, []sdk.Msg{msgSend, msgDelegate, msgDelegate, msgSend})
 }
 
 func (suite *AnteTestSuite) CreateTestEIP712CosmosTxBuilder(
@@ -253,7 +253,7 @@ func (suite *AnteTestSuite) CreateTestEIP712CosmosTxBuilder(
 	fee := legacytx.NewStdFee(gas, gasAmount)
 	accNumber := suite.app.AccountKeeper.GetAccount(suite.ctx, from).GetAccountNumber()
 
-	data := ante.EIP712SignBytes(chainId, accNumber, nonce, 0, fee, msgs, "")
+	data := eip712.EIP712SignBytes(chainId, accNumber, nonce, 0, fee, msgs, "")
 	typedData, err := eip712.WrapTxToTypedData(ethermintCodec, ethChainId, msgs, data, &eip712.FeeDelegationOptions{
 		FeePayer: from,
 	})

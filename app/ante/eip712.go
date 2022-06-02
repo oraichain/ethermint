@@ -1,11 +1,9 @@
 package ante
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/codec/legacy"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -164,7 +162,7 @@ func VerifySignature(
 			return sdkerrors.Wrap(sdkerrors.ErrNoSignatures, "tx doesn't contain any msgs to verify signature")
 		}
 
-		txBytes := EIP712SignBytes(
+		txBytes := eip712.EIP712SignBytes(
 			signerData.ChainID,
 			signerData.AccountNumber,
 			signerData.Sequence,
@@ -241,6 +239,11 @@ func VerifySignature(
 			return sdkerrors.Wrap(err, "failed to recover delegated fee payer from sig")
 		}
 
+		// fmt.Printf("feePayerSig: %s\n", hex.EncodeToString(feePayerSig))
+		// fmt.Printf("sigHash: %s\n", hex.EncodeToString(sigHash))
+		// by, _ := json.Marshal(typedData)
+		// fmt.Printf("typedData: %s\n", by)
+
 		ecPubKey, err := ethcrypto.UnmarshalPubkey(feePayerPubkey)
 		if err != nil {
 			return sdkerrors.Wrap(err, "failed to unmarshal recovered fee payer pubkey")
@@ -270,47 +273,4 @@ func VerifySignature(
 	default:
 		return sdkerrors.Wrapf(sdkerrors.ErrTooManySignatures, "unexpected SignatureData %T", sigData)
 	}
-}
-
-type EIP712SignDoc struct {
-	AccountNumber uint64          `json:"account_number" yaml:"account_number"`
-	Sequence      uint64          `json:"sequence" yaml:"sequence"`
-	TimeoutHeight uint64          `json:"timeout_height,omitempty" yaml:"timeout_height"`
-	ChainID       string          `json:"chain_id" yaml:"chain_id"`
-	Memo          string          `json:"memo" yaml:"memo"`
-	Fee           json.RawMessage `json:"fee" yaml:"fee"`
-}
-
-// StdSignBytes returns the bytes to sign for a transaction.
-func EIP712SignBytes(chainID string, accnum, sequence, timeout uint64, fee legacytx.StdFee, msgs []sdk.Msg, memo string) []byte {
-	msgsBytes := make([]json.RawMessage, 0, len(msgs))
-	for _, msg := range msgs {
-		legacyMsg, ok := msg.(legacytx.LegacyMsg)
-		if !ok {
-			panic(fmt.Errorf("expected %T when using amino JSON", (*legacytx.LegacyMsg)(nil)))
-		}
-
-		msgsBytes = append(msgsBytes, json.RawMessage(legacyMsg.GetSignBytes()))
-	}
-
-	signDoc := EIP712SignDoc{
-		AccountNumber: accnum,
-		ChainID:       chainID,
-		Fee:           json.RawMessage(fee.Bytes()),
-		Memo:          memo,
-		Sequence:      sequence,
-		TimeoutHeight: timeout,
-	}
-	var inInterface map[string]interface{}
-	inrec, _ := legacy.Cdc.MarshalJSON(signDoc)
-	json.Unmarshal(inrec, &inInterface)
-	for i := 0; i < len(msgsBytes); i++ {
-		inInterface[fmt.Sprintf("message%d", i+1)] = msgsBytes[i]
-	}
-	bz, err := json.Marshal(inInterface)
-	if err != nil {
-		panic(err)
-	}
-
-	return sdk.MustSortJSON(bz)
 }

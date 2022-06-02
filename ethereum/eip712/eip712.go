@@ -11,12 +11,42 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/x/auth/legacy/legacytx"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 )
+
+// EIP712SignBytes returns the bytes to sign for a transaction.
+func EIP712SignBytes(chainID string, accnum, sequence, timeout uint64, fee legacytx.StdFee, msgs []sdk.Msg, memo string) []byte {
+	signBytes := legacytx.StdSignBytes(chainID, accnum, sequence, timeout, fee, msgs, memo)
+	var inInterface map[string]interface{}
+	json.Unmarshal(signBytes, &inInterface)
+	delete(inInterface, "msgs")
+
+	// Add messages as separate fields
+	msgsBytes := make([]json.RawMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		legacyMsg, ok := msg.(legacytx.LegacyMsg)
+		if !ok {
+			panic(fmt.Errorf("expected %T when using amino JSON", (*legacytx.LegacyMsg)(nil)))
+		}
+
+		msgsBytes = append(msgsBytes, json.RawMessage(legacyMsg.GetSignBytes()))
+	}
+
+	for i := 0; i < len(msgsBytes); i++ {
+		inInterface[fmt.Sprintf("msg%d", i+1)] = msgsBytes[i]
+	}
+	bz, err := json.Marshal(inInterface)
+	if err != nil {
+		panic(err)
+	}
+
+	return sdk.MustSortJSON(bz)
+}
 
 // ComputeTypedDataHash computes keccak hash of typed data for signing.
 func ComputeTypedDataHash(typedData apitypes.TypedData) ([]byte, error) {
@@ -138,24 +168,41 @@ func extractMsgTypes(cdc codectypes.AnyUnpacker, msgs []sdk.Msg) (apitypes.Types
 	}
 
 	// Add definitions for all messages
+	cachedTypes := make(map[string]string)
+	msgTypeIndex := 1
 	for i := 0; i < len(msgs); i++ {
-		msgTypeName := fmt.Sprintf("Msg%d", i+1)
-		msgAttrName := fmt.Sprintf("message%d", i+1)
-		msgValName := fmt.Sprintf("MsgValue%d", i+1)
+		msg := msgs[i]
+		msgAttrName := fmt.Sprintf("msg%d", i+1)
+		msgTypeName := fmt.Sprintf("Msg%d", msgTypeIndex)
+		msgValName := fmt.Sprintf("MsgValue%d", msgTypeIndex)
 
-		// Add message to Tx type
-		rootTypes["Tx"] = append(rootTypes["Tx"], apitypes.Type{Name: msgAttrName, Type: msgTypeName})
+		msgType := apitypes.Type{Name: msgAttrName, Type: msgTypeName}
 
-		// Add message type
-		rootTypes[msgTypeName] = []apitypes.Type{
-			{Name: "type", Type: "string"},
-			{Name: "value", Type: msgValName},
+		// Add new types if not already created
+		legacyMsg, ok := msg.(legacytx.LegacyMsg)
+		if !ok {
+			panic(fmt.Errorf("expected %T when using amino JSON", (*legacytx.LegacyMsg)(nil)))
+		}
+		legacyMsgType := legacyMsg.Type()
+		if len(cachedTypes[legacyMsgType]) == 0 {
+			// Add message type
+			rootTypes[msgTypeName] = []apitypes.Type{
+				{Name: "type", Type: "string"},
+				{Name: "value", Type: msgValName},
+			}
+
+			// Add message value type
+			if err := walkFields(cdc, rootTypes, msgValName, msg); err != nil {
+				return nil, err
+			}
+
+			cachedTypes[legacyMsgType] = msgTypeName
+			msgTypeIndex += 1
+		} else {
+			msgType.Type = cachedTypes[legacyMsgType]
 		}
 
-		// Add message value type
-		if err := walkFields(cdc, rootTypes, msgValName, msgs[i]); err != nil {
-			return nil, err
-		}
+		rootTypes["Tx"] = append(rootTypes["Tx"], msgType)
 	}
 	return rootTypes, nil
 }
