@@ -239,11 +239,6 @@ func VerifySignature(
 			return sdkerrors.Wrap(err, "failed to recover delegated fee payer from sig")
 		}
 
-		// fmt.Printf("feePayerSig: %s\n", hex.EncodeToString(feePayerSig))
-		// fmt.Printf("sigHash: %s\n", hex.EncodeToString(sigHash))
-		// by, _ := json.Marshal(typedData)
-		// fmt.Printf("typedData: %s\n", by)
-
 		ecPubKey, err := ethcrypto.UnmarshalPubkey(feePayerPubkey)
 		if err != nil {
 			return sdkerrors.Wrap(err, "failed to unmarshal recovered fee payer pubkey")
@@ -254,7 +249,7 @@ func VerifySignature(
 		}
 
 		if !pubKey.Equals(pk) {
-			return sdkerrors.Wrapf(sdkerrors.ErrInvalidPubKey, "feePayer pubkey %s is different from transaction pubkey %s", pubKey.Address(), pk.Address())
+			return sdkerrors.Wrapf(sdkerrors.ErrInvalidPubKey, "feePayer pubkey %s is different from transaction pubkey %s", pubKey, pk)
 		}
 
 		recoveredFeePayerAcc := sdk.AccAddress(pk.Address().Bytes())
