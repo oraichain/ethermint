@@ -23,7 +23,10 @@ import (
 func EIP712SignBytes(chainID string, accnum, sequence, timeout uint64, fee legacytx.StdFee, msgs []sdk.Msg, memo string) []byte {
 	signBytes := legacytx.StdSignBytes(chainID, accnum, sequence, timeout, fee, msgs, memo)
 	var inInterface map[string]interface{}
-	json.Unmarshal(signBytes, &inInterface)
+	err := json.Unmarshal(signBytes, &inInterface)
+	if err != nil {
+		panic(err)
+	}
 	delete(inInterface, "msgs")
 
 	// Add messages as separate fields
