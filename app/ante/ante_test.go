@@ -4,8 +4,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/cosmos/cosmos-sdk/types/tx/signing"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
 
@@ -27,6 +25,28 @@ func (suite AnteTestSuite) TestAnteHandler() {
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 
 	suite.app.EvmKeeper.SetBalance(suite.ctx, addr, big.NewInt(10000000000))
+
+	// allow send & delegate msg via eip712
+	params := suite.app.EvmKeeper.GetParams(suite.ctx)
+	params.EIP712AllowedMsgs = []evmtypes.EIP712AllowedMsg{
+		{
+			LegacyMsgType: "send",
+			ValueTypes: []evmtypes.EIP712MsgAttrType{
+				{Name: "from_address", Type: "string"},
+				{Name: "to_address", Type: "string"},
+				{Name: "amount", Type: "Coin[]"},
+			},
+		},
+		{
+			LegacyMsgType: "delegate",
+			ValueTypes: []evmtypes.EIP712MsgAttrType{
+				{Name: "delegator_address", Type: "string"},
+				{Name: "validator_address", Type: "string"},
+				{Name: "amount", Type: "Coin"},
+			},
+		},
+	}
+	suite.app.EvmKeeper.SetParams(suite.ctx, params)
 
 	suite.app.FeeMarketKeeper.SetBaseFee(suite.ctx, big.NewInt(100))
 

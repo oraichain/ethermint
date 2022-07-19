@@ -37,13 +37,15 @@ func init() {
 type Eip712SigVerificationDecorator struct {
 	ak              evmtypes.AccountKeeper
 	signModeHandler authsigning.SignModeHandler
+	evmKeeper       EVMKeeper
 }
 
 // NewEip712SigVerificationDecorator creates a new Eip712SigVerificationDecorator
-func NewEip712SigVerificationDecorator(ak evmtypes.AccountKeeper, signModeHandler authsigning.SignModeHandler) Eip712SigVerificationDecorator {
+func NewEip712SigVerificationDecorator(ak evmtypes.AccountKeeper, signModeHandler authsigning.SignModeHandler, ek EVMKeeper) Eip712SigVerificationDecorator {
 	return Eip712SigVerificationDecorator{
 		ak:              ak,
 		signModeHandler: signModeHandler,
+		evmKeeper:       ek,
 	}
 }
 
@@ -126,7 +128,8 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 		return next(ctx, tx, simulate)
 	}
 
-	if err := VerifySignature(pubKey, signerData, sig.Data, svd.signModeHandler, authSignTx); err != nil {
+	evmParams := svd.evmKeeper.GetParams(ctx)
+	if err := VerifySignature(pubKey, signerData, sig.Data, svd.signModeHandler, authSignTx, evmParams); err != nil {
 		errMsg := fmt.Errorf("signature verification failed; please verify account number (%d) and chain-id (%s): %w", accNum, chainID, err)
 		return ctx, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, errMsg.Error())
 	}
@@ -142,6 +145,7 @@ func VerifySignature(
 	sigData signing.SignatureData,
 	_ authsigning.SignModeHandler,
 	tx authsigning.Tx,
+	params evmtypes.Params,
 ) error {
 	switch data := sigData.(type) {
 	case *signing.SingleSignatureData:
@@ -214,7 +218,7 @@ func VerifySignature(
 			FeePayer: feePayer,
 		}
 
-		typedData, err := eip712.WrapTxToTypedData(ethermintCodec, extOpt.TypedDataChainID, msgs, txBytes, feeDelegation)
+		typedData, err := eip712.WrapTxToTypedData(extOpt.TypedDataChainID, msgs, txBytes, feeDelegation, params)
 		if err != nil {
 			return sdkerrors.Wrap(err, "failed to pack tx data in EIP712 object")
 		}

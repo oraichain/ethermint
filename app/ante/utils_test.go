@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/x/auth/legacy/legacytx"
 	types2 "github.com/cosmos/cosmos-sdk/x/bank/types"
 	types3 "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -249,15 +248,16 @@ func (suite *AnteTestSuite) CreateTestEIP712CosmosTxBuilder(
 	ethChainId := pc.Uint64()
 
 	// GenerateTypedData TypedData
-	var ethermintCodec codec.ProtoCodecMarshaler
 	fee := legacytx.NewStdFee(gas, gasAmount)
 	accNumber := suite.app.AccountKeeper.GetAccount(suite.ctx, from).GetAccountNumber()
 
 	data := eip712.EIP712SignBytes(chainId, accNumber, nonce, 0, fee, msgs, "")
-	typedData, err := eip712.WrapTxToTypedData(ethermintCodec, ethChainId, msgs, data, &eip712.FeeDelegationOptions{
+	evmParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+	typedData, err := eip712.WrapTxToTypedData(ethChainId, msgs, data, &eip712.FeeDelegationOptions{
 		FeePayer: from,
-	})
+	}, evmParams)
 	suite.Require().NoError(err)
+
 	sigHash, err := eip712.ComputeTypedDataHash(typedData)
 	suite.Require().NoError(err)
 
