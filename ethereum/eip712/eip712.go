@@ -135,7 +135,12 @@ func extractMsgTypes(msgs []sdk.Msg, params evmtypes.Params) (apitypes.Types, er
 		legacyMsgType := legacyMsg.Type()
 		allowedMsg := params.EIP712AllowedMsgFromMsgType(legacyMsgType)
 		if allowedMsg == nil {
-			return apitypes.Types{}, sdkerrors.Wrapf(sdkerrors.ErrInvalidRequest, "eip712 message %s is not allowed", legacyMsgType)
+			err := sdkerrors.Wrapf(
+				sdkerrors.ErrInvalidType,
+				"eip712 message type \"%s\" is not permitted",
+				legacyMsgType,
+			)
+			return apitypes.Types{}, err
 		}
 
 		// Add msg property to tx
