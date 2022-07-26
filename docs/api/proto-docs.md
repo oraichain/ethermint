@@ -198,7 +198,8 @@ EIP712AllowedMsg stores an allowed legacy msg and its eip712 type.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| `legacy_msg_type` | [string](#string) |  | legacy msg type string |
+| `msg_type_url` | [string](#string) |  | msg's proto type name. ie "/cosmos.bank.v1beta1.MsgSend" |
+| `msg_value_type_name` | [string](#string) |  | name of the eip712 value type. ie "MsgValueSend" |
 | `value_types` | [EIP712MsgAttrType](#ethermint.evm.v1.EIP712MsgAttrType) | repeated | types of the msg value |
 | `nested_types` | [EIP712NestedMsgType](#ethermint.evm.v1.EIP712NestedMsgType) | repeated | nested types of the msg value |
 

@@ -94,10 +94,10 @@ func (p Params) Validate() error {
 	return validateEIP712AllowedMsgs(p.EIP712AllowedMsgs)
 }
 
-// EIP712AllowedMsgFromMsgType returns the EIP712AllowedMsg for a given legacy message type.
-func (p Params) EIP712AllowedMsgFromMsgType(legacyMsgType string) *EIP712AllowedMsg {
+// EIP712AllowedMsgFromMsgType returns the EIP712AllowedMsg for a given message type url.
+func (p Params) EIP712AllowedMsgFromMsgType(msgTypeUrl string) *EIP712AllowedMsg {
 	for _, allowedMsg := range p.EIP712AllowedMsgs {
-		if allowedMsg.LegacyMsgType == legacyMsgType {
+		if allowedMsg.MsgTypeUrl == msgTypeUrl {
 			return &allowedMsg
 		}
 	}
@@ -160,13 +160,13 @@ func validateEIP712AllowedMsgs(i interface{}) error {
 		return fmt.Errorf("invalid EIP712AllowedMsg slice type: %T", i)
 	}
 
-	// ensure no duplicate legacy msg types
+	// ensure no duplicate msg type urls
 	msgTypes := make(map[string]bool)
 	for _, allowedMsg := range allowedMsgs {
-		if _, ok := msgTypes[allowedMsg.LegacyMsgType]; ok {
-			return fmt.Errorf("duplicate eip712 allowed legacy msg type: %s", allowedMsg.LegacyMsgType)
+		if _, ok := msgTypes[allowedMsg.MsgTypeUrl]; ok {
+			return fmt.Errorf("duplicate eip712 allowed legacy msg type: %s", allowedMsg.MsgTypeUrl)
 		}
-		msgTypes[allowedMsg.LegacyMsgType] = true
+		msgTypes[allowedMsg.MsgTypeUrl] = true
 	}
 
 	return nil

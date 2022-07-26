@@ -125,20 +125,20 @@ func extractMsgTypes(msgs []sdk.Msg, params evmtypes.Params) (apitypes.Types, er
 		msgTypeName := fmt.Sprintf("Msg%d", i+1)
 
 		// ensure eip712 messages implement legacytx.LegacyMsg
-		legacyMsg, ok := msg.(legacytx.LegacyMsg)
+		_, ok := msg.(legacytx.LegacyMsg)
 		if !ok {
 			err := sdkerrors.Wrapf(sdkerrors.ErrInvalidType, "msg %T must implement legacytx.LegacyMsg", (*legacytx.LegacyMsg)(nil))
 			return apitypes.Types{}, err
 		}
 
 		// get corresponding allowed msg from params
-		legacyMsgType := legacyMsg.Type()
-		allowedMsg := params.EIP712AllowedMsgFromMsgType(legacyMsgType)
+		msgType := sdk.MsgTypeURL(msg)
+		allowedMsg := params.EIP712AllowedMsgFromMsgType(msgType)
 		if allowedMsg == nil {
 			err := sdkerrors.Wrapf(
 				sdkerrors.ErrInvalidType,
 				"eip712 message type \"%s\" is not permitted",
-				legacyMsgType,
+				msgType,
 			)
 			return apitypes.Types{}, err
 		}
@@ -148,25 +148,22 @@ func extractMsgTypes(msgs []sdk.Msg, params evmtypes.Params) (apitypes.Types, er
 		rootTypes["Tx"] = append(rootTypes["Tx"], txMsgType)
 
 		// Add msg type to root types
-		msgValueTypeName := msgTypeNameFromLegacyMsgType(legacyMsgType)
+		msgValueTypeName := allowedMsg.MsgValueTypeName
 		rootTypes[msgTypeName] = []apitypes.Type{
 			{Name: "type", Type: "string"},
 			{Name: "value", Type: msgValueTypeName},
 		}
 
 		// Add msg value type and nested types
-		if rootTypes[msgValueTypeName] == nil {
-			allowedMsg := params.EIP712AllowedMsgFromMsgType(legacyMsgType)
-			if allowedMsg != nil {
-				// add msg value type
-				rootTypes[msgValueTypeName] = msgAttrsToEIP712Types(allowedMsg.ValueTypes)
+		if rootTypes[msgValueTypeName] == nil && allowedMsg != nil {
+			// add msg value type
+			rootTypes[msgValueTypeName] = msgAttrsToEIP712Types(allowedMsg.ValueTypes)
 
-				// add nested types
-				for _, nestedType := range allowedMsg.NestedTypes {
-					nestedTypeName := nestedType.Name
-					if rootTypes[nestedTypeName] == nil {
-						rootTypes[nestedTypeName] = msgAttrsToEIP712Types(nestedType.Attrs)
-					}
+			// add nested types
+			for _, nestedType := range allowedMsg.NestedTypes {
+				nestedTypeName := nestedType.Name
+				if rootTypes[nestedTypeName] == nil {
+					rootTypes[nestedTypeName] = msgAttrsToEIP712Types(nestedType.Attrs)
 				}
 			}
 		}

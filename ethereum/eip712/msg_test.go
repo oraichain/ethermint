@@ -9,8 +9,8 @@ import (
 	stakingTypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
 	"github.com/stretchr/testify/require"
-
 	"github.com/tharsis/ethermint/tests"
+
 	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 )
 
@@ -18,7 +18,8 @@ func TestExtractMsgTypes(t *testing.T) {
 	params := evmtypes.DefaultParams()
 	params.EIP712AllowedMsgs = []evmtypes.EIP712AllowedMsg{
 		{
-			LegacyMsgType: "send",
+			MsgTypeUrl:       "/cosmos.bank.v1beta1.MsgSend",
+			MsgValueTypeName: "MsgValueSend",
 			ValueTypes: []evmtypes.EIP712MsgAttrType{
 				{Name: "from_address", Type: "string"},
 				{Name: "to_address", Type: "string"},
@@ -26,7 +27,8 @@ func TestExtractMsgTypes(t *testing.T) {
 			},
 		},
 		{
-			LegacyMsgType: "delegate",
+			MsgTypeUrl:       "/cosmos.staking.v1beta1.MsgDelegate",
+			MsgValueTypeName: "MsgValueDelegate",
 			ValueTypes: []evmtypes.EIP712MsgAttrType{
 				{Name: "delegator_address", Type: "string"},
 				{Name: "validator_address", Type: "string"},
@@ -134,7 +136,7 @@ func TestExtractMsgTypes(t *testing.T) {
 				),
 			},
 			success: false,
-			errMsg:  "eip712 message multisend is not allowed: invalid request",
+			errMsg:  "eip712 message type \"/cosmos.bank.v1beta1.MsgMultiSend\" is not permitted: invalid type",
 		},
 	}
 

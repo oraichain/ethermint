@@ -30,7 +30,8 @@ func (suite AnteTestSuite) TestAnteHandler() {
 	params := suite.app.EvmKeeper.GetParams(suite.ctx)
 	params.EIP712AllowedMsgs = []evmtypes.EIP712AllowedMsg{
 		{
-			LegacyMsgType: "send",
+			MsgTypeUrl:       "/cosmos.bank.v1beta1.MsgSend",
+			MsgValueTypeName: "MsgValueSend",
 			ValueTypes: []evmtypes.EIP712MsgAttrType{
 				{Name: "from_address", Type: "string"},
 				{Name: "to_address", Type: "string"},
@@ -38,7 +39,8 @@ func (suite AnteTestSuite) TestAnteHandler() {
 			},
 		},
 		{
-			LegacyMsgType: "delegate",
+			MsgTypeUrl:       "/cosmos.staking.v1beta1.MsgDelegate",
+			MsgValueTypeName: "MsgValueDelegate",
 			ValueTypes: []evmtypes.EIP712MsgAttrType{
 				{Name: "delegator_address", Type: "string"},
 				{Name: "validator_address", Type: "string"},

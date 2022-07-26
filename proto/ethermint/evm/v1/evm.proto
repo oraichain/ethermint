@@ -238,8 +238,11 @@ message TraceConfig {
 
 // EIP712AllowedMsg stores an allowed legacy msg and its eip712 type.
 message EIP712AllowedMsg {
-  // legacy msg type string
-  string legacy_msg_type = 1;
+  // msg's proto type name. ie "/cosmos.bank.v1beta1.MsgSend"
+  string msg_type_url = 1;
+
+  // name of the eip712 value type. ie "MsgValueSend"
+  string msg_value_type_name = 2;
 
   // types of the msg value
   repeated EIP712MsgAttrType value_types = 3 [(gogoproto.nullable) = false];
