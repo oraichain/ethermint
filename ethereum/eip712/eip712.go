@@ -3,7 +3,6 @@ package eip712
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -182,9 +181,4 @@ func msgAttrsToEIP712Types(attrTypes []evmtypes.EIP712MsgAttrType) []apitypes.Ty
 		msgTypes[i] = apitypes
 	}
 	return msgTypes
-}
-
-// msgTypeNameFromLegacyMsgType returns the name of the EIP712 type for a legacy message type.
-func msgTypeNameFromLegacyMsgType(legacyMsgType string) string {
-	return fmt.Sprintf("MsgValue%s", strings.Title(legacyMsgType))
 }
