@@ -14,8 +14,8 @@ import (
 	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 )
 
-// EIP712SignBytes returns the bytes to sign for a transaction.
-func EIP712SignBytes(chainID string, accnum, sequence, timeout uint64, fee legacytx.StdFee, msgs []sdk.Msg, memo string) []byte {
+// ConstructUntypedEIP712Data returns the bytes to sign for a transaction.
+func ConstructUntypedEIP712Data(chainID string, accnum, sequence, timeout uint64, fee legacytx.StdFee, msgs []sdk.Msg, memo string) []byte {
 	signBytes := legacytx.StdSignBytes(chainID, accnum, sequence, timeout, fee, msgs, memo)
 	var inInterface map[string]interface{}
 	err := json.Unmarshal(signBytes, &inInterface)

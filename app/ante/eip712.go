@@ -166,7 +166,7 @@ func VerifySignature(
 			return sdkerrors.Wrap(sdkerrors.ErrNoSignatures, "tx doesn't contain any msgs to verify signature")
 		}
 
-		txBytes := eip712.EIP712SignBytes(
+		txBytes := eip712.ConstructUntypedEIP712Data(
 			signerData.ChainID,
 			signerData.AccountNumber,
 			signerData.Sequence,
