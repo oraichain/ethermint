@@ -20,11 +20,12 @@ const (
 
 // Parameter keys
 var (
-	ParamStoreKeyEVMDenom     = []byte("EVMDenom")
-	ParamStoreKeyEnableCreate = []byte("EnableCreate")
-	ParamStoreKeyEnableCall   = []byte("EnableCall")
-	ParamStoreKeyExtraEIPs    = []byte("EnableExtraEIPs")
-	ParamStoreKeyChainConfig  = []byte("ChainConfig")
+	ParamStoreKeyEVMDenom          = []byte("EVMDenom")
+	ParamStoreKeyEnableCreate      = []byte("EnableCreate")
+	ParamStoreKeyEnableCall        = []byte("EnableCall")
+	ParamStoreKeyExtraEIPs         = []byte("EnableExtraEIPs")
+	ParamStoreKeyChainConfig       = []byte("ChainConfig")
+	ParamStoreKeyEIP712AllowedMsgs = []byte("EIP712AllowedMsgs")
 
 	// AvailableExtraEIPs define the list of all EIPs that can be enabled by the
 	// EVM interpreter. These EIPs are applied in order and can override the
@@ -42,11 +43,12 @@ func ParamKeyTable() paramtypes.KeyTable {
 // NewParams creates a new Params instance
 func NewParams(evmDenom string, enableCreate, enableCall bool, config ChainConfig, extraEIPs ...int64) Params {
 	return Params{
-		EvmDenom:     evmDenom,
-		EnableCreate: enableCreate,
-		EnableCall:   enableCall,
-		ExtraEIPs:    extraEIPs,
-		ChainConfig:  config,
+		EvmDenom:          evmDenom,
+		EnableCreate:      enableCreate,
+		EnableCall:        enableCall,
+		ExtraEIPs:         extraEIPs,
+		ChainConfig:       config,
+		EIP712AllowedMsgs: []EIP712AllowedMsg{},
 	}
 }
 
@@ -54,11 +56,12 @@ func NewParams(evmDenom string, enableCreate, enableCall bool, config ChainConfi
 // ExtraEIPs is empty to prevent overriding the latest hard fork instruction set
 func DefaultParams() Params {
 	return Params{
-		EvmDenom:     DefaultEVMDenom,
-		EnableCreate: true,
-		EnableCall:   true,
-		ChainConfig:  DefaultChainConfig(),
-		ExtraEIPs:    nil,
+		EvmDenom:          DefaultEVMDenom,
+		EnableCreate:      true,
+		EnableCall:        true,
+		ChainConfig:       DefaultChainConfig(),
+		ExtraEIPs:         nil,
+		EIP712AllowedMsgs: []EIP712AllowedMsg{},
 	}
 }
 
@@ -70,6 +73,7 @@ func (p *Params) ParamSetPairs() paramtypes.ParamSetPairs {
 		paramtypes.NewParamSetPair(ParamStoreKeyEnableCall, &p.EnableCall, validateBool),
 		paramtypes.NewParamSetPair(ParamStoreKeyExtraEIPs, &p.ExtraEIPs, validateEIPs),
 		paramtypes.NewParamSetPair(ParamStoreKeyChainConfig, &p.ChainConfig, validateChainConfig),
+		paramtypes.NewParamSetPair(ParamStoreKeyEIP712AllowedMsgs, &p.EIP712AllowedMsgs, validateEIP712AllowedMsgs),
 	}
 }
 
@@ -83,7 +87,21 @@ func (p Params) Validate() error {
 		return err
 	}
 
-	return p.ChainConfig.Validate()
+	if err := p.ChainConfig.Validate(); err != nil {
+		return err
+	}
+
+	return validateEIP712AllowedMsgs(p.EIP712AllowedMsgs)
+}
+
+// EIP712AllowedMsgFromMsgType returns the EIP712AllowedMsg for a given message type url.
+func (p Params) EIP712AllowedMsgFromMsgType(msgTypeUrl string) *EIP712AllowedMsg {
+	for _, allowedMsg := range p.EIP712AllowedMsgs {
+		if allowedMsg.MsgTypeUrl == msgTypeUrl {
+			return &allowedMsg
+		}
+	}
+	return nil
 }
 
 // EIPs returns the ExtraEips as a int slice
@@ -134,6 +152,24 @@ func validateChainConfig(i interface{}) error {
 	}
 
 	return cfg.Validate()
+}
+
+func validateEIP712AllowedMsgs(i interface{}) error {
+	allowedMsgs, ok := i.([]EIP712AllowedMsg)
+	if !ok {
+		return fmt.Errorf("invalid EIP712AllowedMsg slice type: %T", i)
+	}
+
+	// ensure no duplicate msg type urls
+	msgTypes := make(map[string]bool)
+	for _, allowedMsg := range allowedMsgs {
+		if _, ok := msgTypes[allowedMsg.MsgTypeUrl]; ok {
+			return fmt.Errorf("duplicate eip712 allowed legacy msg type: %s", allowedMsg.MsgTypeUrl)
+		}
+		msgTypes[allowedMsg.MsgTypeUrl] = true
+	}
+
+	return nil
 }
 
 // IsLondon returns if london hardfork is enabled.
