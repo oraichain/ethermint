@@ -44,7 +44,7 @@ func MigrateStore(ctx sdk.Context, paramstore *paramtypes.Subspace) error {
 			},
 		},
 		{
-			MsgTypeUrl:       "/kava.evmutil.v1beta1.MsgWithdraw",
+			MsgTypeUrl:       "/kava.earn.v1beta1.MsgWithdraw",
 			MsgValueTypeName: "MsgValueEarnWithdraw",
 			ValueTypes: []types.EIP712MsgAttrType{
 				{Name: "from", Type: "string"},
