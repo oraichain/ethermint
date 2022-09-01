@@ -1,6 +1,7 @@
 package ante
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -164,6 +165,11 @@ func VerifySignature(
 		msgs := tx.GetMsgs()
 		if len(msgs) == 0 {
 			return sdkerrors.Wrap(sdkerrors.ErrNoSignatures, "tx doesn't contain any msgs to verify signature")
+		}
+		bytes, _ := json.Marshal(msgs)
+		fmt.Printf("EIP712 Messages: %s", string(bytes))
+		for _, msg := range msgs {
+			fmt.Printf("Single Msg: %v, %T", msg, msg)
 		}
 
 		txBytes := eip712.ConstructUntypedEIP712Data(
