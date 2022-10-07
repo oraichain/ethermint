@@ -90,7 +90,7 @@ var (
 			MsgValueTypeName: "MsgValueIncentiveClaimHardReward",
 			ValueTypes: []types.EIP712MsgAttrType{
 				{Name: "sender", Type: "string"},
-				{Name: "denoms_to_claim", Type: "IncentiveSelection"},
+				{Name: "denoms_to_claim", Type: "IncentiveSelection[]"},
 			},
 			NestedTypes: []types.EIP712NestedMsgType{
 				{
@@ -107,7 +107,7 @@ var (
 			MsgValueTypeName: "MsgValueIncentiveClaimDelegatorReward",
 			ValueTypes: []types.EIP712MsgAttrType{
 				{Name: "sender", Type: "string"},
-				{Name: "denoms_to_claim", Type: "IncentiveSelection"},
+				{Name: "denoms_to_claim", Type: "IncentiveSelection[]"},
 			},
 			NestedTypes: []types.EIP712NestedMsgType{
 				{
@@ -124,7 +124,7 @@ var (
 			MsgValueTypeName: "MsgValueIncentiveClaimSwapReward",
 			ValueTypes: []types.EIP712MsgAttrType{
 				{Name: "sender", Type: "string"},
-				{Name: "denoms_to_claim", Type: "IncentiveSelection"},
+				{Name: "denoms_to_claim", Type: "IncentiveSelection[]"},
 			},
 			NestedTypes: []types.EIP712NestedMsgType{
 				{
@@ -141,7 +141,7 @@ var (
 			MsgValueTypeName: "MsgValueIncentiveClaimSavingsReward",
 			ValueTypes: []types.EIP712MsgAttrType{
 				{Name: "sender", Type: "string"},
-				{Name: "denoms_to_claim", Type: "IncentiveSelection"},
+				{Name: "denoms_to_claim", Type: "IncentiveSelection[]"},
 			},
 			NestedTypes: []types.EIP712NestedMsgType{
 				{
@@ -158,7 +158,7 @@ var (
 			MsgValueTypeName: "MsgValueIncentiveClaimEarnReward",
 			ValueTypes: []types.EIP712MsgAttrType{
 				{Name: "sender", Type: "string"},
-				{Name: "denoms_to_claim", Type: "IncentiveSelection"},
+				{Name: "denoms_to_claim", Type: "IncentiveSelection[]"},
 			},
 			NestedTypes: []types.EIP712NestedMsgType{
 				{
