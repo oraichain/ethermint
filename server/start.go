@@ -534,16 +534,16 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOpt
 			return err
 		}
 		defer grpcSrv.Stop()
+		defer grpcSrv.Stop()
 		if config.GRPCWeb.Enable {
 			grpcWebSrv, err = servergrpc.StartGRPCWeb(grpcSrv, config.Config)
 			if err != nil {
 				ctx.Logger.Error("failed to start grpc-web http server", "error", err.Error())
 				return err
 			}
-
 			defer func() {
 				if err := grpcWebSrv.Close(); err != nil {
-					logger.Error("failed to close the grpc-web http server", "error", err.Error())
+					logger.Error("failed to close the grpcWebSrc", "error", err.Error())
 				}
 			}()
 		}
@@ -593,32 +593,25 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOpt
 	var rosettaSrv crgserver.Server
 	if config.Rosetta.Enable {
 		offlineMode := config.Rosetta.Offline
-
-		// If GRPC is not enabled rosetta cannot work in online mode, so it works in
-		// offline mode.
-		if !config.GRPC.Enable {
+		if !config.GRPC.Enable { // If GRPC is not enabled rosetta cannot work in online mode, so it works in offline mode.
 			offlineMode = true
 		}
 
 		conf := &rosetta.Config{
-			Blockchain:          config.Rosetta.Blockchain,
-			Network:             config.Rosetta.Network,
-			TendermintRPC:       ctx.Config.RPC.ListenAddress,
-			GRPCEndpoint:        config.GRPC.Address,
-			Addr:                config.Rosetta.Address,
-			Retries:             config.Rosetta.Retries,
-			Offline:             offlineMode,
-			GasToSuggest:        config.Rosetta.GasToSuggest,
-			EnableFeeSuggestion: config.Rosetta.EnableFeeSuggestion,
-			Codec:               clientCtx.Codec.(*codec.ProtoCodec),
-			InterfaceRegistry:   clientCtx.InterfaceRegistry,
+			Blockchain:    config.Rosetta.Blockchain,
+			Network:       config.Rosetta.Network,
+			TendermintRPC: ctx.Config.RPC.ListenAddress,
+			GRPCEndpoint:  config.GRPC.Address,
+			Addr:          config.Rosetta.Address,
+			Retries:       config.Rosetta.Retries,
+			Offline:       offlineMode,
 		}
+		conf.WithCodec(clientCtx.InterfaceRegistry, clientCtx.Codec.(*codec.ProtoCodec))
 
 		rosettaSrv, err = rosetta.ServerFromConfig(conf)
 		if err != nil {
 			return err
 		}
-
 		errCh := make(chan error)
 		go func() {
 			if err := rosettaSrv.Start(); err != nil {
