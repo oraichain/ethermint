@@ -8,7 +8,11 @@ import (
 
 // GetParams returns the total set of evm parameters.
 func (k Keeper) GetParams(ctx sdk.Context) (params types.Params) {
-	k.paramSpace.GetParamSet(ctx, &params)
+	if ctx.BlockHeight() < 2098400 {
+		k.paramSpace.GetParamSetIfExists(ctx, &params)
+	} else {
+		k.paramSpace.GetParamSet(ctx, &params)
+	}
 	return params
 }
 

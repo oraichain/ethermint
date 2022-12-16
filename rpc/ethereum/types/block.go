@@ -30,9 +30,10 @@ const (
 )
 
 const (
-	BlockParamEarliest = "earliest"
-	BlockParamLatest   = "latest"
-	BlockParamPending  = "pending"
+	BlockParamEarliest  = "earliest"
+	BlockParamLatest    = "latest"
+	BlockParamFinalized = "finalized"
+	BlockParamPending   = "pending"
 )
 
 // NewBlockNumber creates a new BlockNumber instance.
@@ -72,7 +73,7 @@ func (bn *BlockNumber) UnmarshalJSON(data []byte) error {
 	case BlockParamEarliest:
 		*bn = EthEarliestBlockNumber
 		return nil
-	case BlockParamLatest:
+	case BlockParamLatest, BlockParamFinalized:
 		*bn = EthLatestBlockNumber
 		return nil
 	case BlockParamPending:
@@ -158,7 +159,7 @@ func (bnh *BlockNumberOrHash) decodeFromString(input string) error {
 	case BlockParamEarliest:
 		bn := EthEarliestBlockNumber
 		bnh.BlockNumber = &bn
-	case BlockParamLatest:
+	case BlockParamLatest, BlockParamFinalized:
 		bn := EthLatestBlockNumber
 		bnh.BlockNumber = &bn
 	case BlockParamPending:
