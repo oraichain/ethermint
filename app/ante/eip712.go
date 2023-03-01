@@ -233,6 +233,7 @@ func VerifySignature(
 				Gas:    tx.GetGas(),
 			},
 			msgs, tx.GetMemo(),
+			tx.GetTip(),
 		)
 
 		signerChainID, err := ethermint.ParseChainID(signerData.ChainID)
