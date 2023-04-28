@@ -17,6 +17,8 @@ package keeper
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	v2types "github.com/evmos/ethermint/x/evm/migrations/v2/types"
+	migrations "github.com/evmos/ethermint/x/evm/migrations/v3"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -49,7 +51,44 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 
 // GetLegacyParams returns param set for version before migrate
 func (k Keeper) GetLegacyParams(ctx sdk.Context) types.Params {
-	var params types.Params
-	k.ss.GetParamSetIfExists(ctx, &params)
+	var legacyParams v2types.V2Params
+	k.ss.GetParamSetIfExists(ctx, &legacyParams)
+
+	newChainConfig := types.ChainConfig{
+		HomesteadBlock:      legacyParams.ChainConfig.HomesteadBlock,
+		DAOForkBlock:        legacyParams.ChainConfig.DAOForkBlock,
+		DAOForkSupport:      legacyParams.ChainConfig.DAOForkSupport,
+		EIP150Block:         legacyParams.ChainConfig.EIP150Block,
+		EIP150Hash:          legacyParams.ChainConfig.EIP150Hash,
+		EIP155Block:         legacyParams.ChainConfig.EIP155Block,
+		EIP158Block:         legacyParams.ChainConfig.EIP158Block,
+		ByzantiumBlock:      legacyParams.ChainConfig.ByzantiumBlock,
+		ConstantinopleBlock: legacyParams.ChainConfig.ConstantinopleBlock,
+		PetersburgBlock:     legacyParams.ChainConfig.PetersburgBlock,
+		IstanbulBlock:       legacyParams.ChainConfig.IstanbulBlock,
+		MuirGlacierBlock:    legacyParams.ChainConfig.MuirGlacierBlock,
+		BerlinBlock:         legacyParams.ChainConfig.BerlinBlock,
+		LondonBlock:         legacyParams.ChainConfig.LondonBlock,
+		ArrowGlacierBlock:   legacyParams.ChainConfig.ArrowGlacierBlock,
+
+		// This is an old field, but renamed from mergeForkBlock
+		MergeNetsplitBlock: legacyParams.ChainConfig.MergeForkBlock,
+
+		// New fields are nil
+		GrayGlacierBlock: nil,
+		ShanghaiBlock:    nil,
+		CancunBlock:      nil,
+	}
+
+	params := types.Params{
+		EvmDenom:            legacyParams.EvmDenom,
+		EnableCreate:        legacyParams.EnableCreate,
+		EnableCall:          legacyParams.EnableCall,
+		ExtraEIPs:           legacyParams.ExtraEIPs,
+		ChainConfig:         newChainConfig,
+		EIP712AllowedMsgs:   migrations.MigrateEIP712AllowedMsgs(legacyParams.EIP712AllowedMsgs),
+		AllowUnprotectedTxs: false, // Upstream v1 to v2
+	}
+
 	return params
 }
