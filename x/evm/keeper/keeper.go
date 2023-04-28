@@ -32,6 +32,7 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 
 	ethermint "github.com/evmos/ethermint/types"
+	v2types "github.com/evmos/ethermint/x/evm/migrations/v2/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	evm "github.com/evmos/ethermint/x/evm/vm"
@@ -110,6 +111,10 @@ func NewKeeper(
 	// ensure the authority account is correct
 	if err := sdk.VerifyAddressFormat(authority); err != nil {
 		panic(err)
+	}
+
+	if !ss.HasKeyTable() {
+		ss = ss.WithKeyTable(v2types.ParamKeyTable())
 	}
 
 	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
