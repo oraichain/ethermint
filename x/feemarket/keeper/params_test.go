@@ -83,7 +83,6 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	storeKey := sdk.NewKVStoreKey(types.ModuleName)
 	tKey := sdk.NewTransientStoreKey(types.TransientKey)
 	ctx := testutil.DefaultContext(storeKey, tKey)
-	//kvStore := ctx.KVStore(storeKey)
 
 	// paramspace used only for setting legacy parameters (not given to keeper)
 	setParamSpace := paramtypes.NewSubspace(
@@ -105,8 +104,11 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 		"feemarket",
 	)
 
+	// assertion required to ensure we are testing correctness
+	// of a keeper receiving a subpsace without a key table registration
 	suite.Require().False(unregisteredSubspace.HasKeyTable())
 
+	// create a keeper, mimicking an app.go which has not registered the key table
 	k := keeper.NewKeeper(cdc, authtypes.NewModuleAddress("gov"), storeKey, tKey, unregisteredSubspace)
 
 	// the keeper must set the key table
