@@ -3,6 +3,7 @@ package keeper_test
 import (
 	"reflect"
 
+	sdkmath "cosmossdk.io/math"
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -10,6 +11,7 @@ import (
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/x/evm/keeper"
+	v2types "github.com/evmos/ethermint/x/evm/migrations/v2/types"
 	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/evmos/ethermint/x/evm/vm/geth"
 )
@@ -162,4 +164,50 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	// ensure we do not attempt to override any existing key tables to keep compatibility
 	// when passing a subpsace to the keeper that has already been used to work with parameters
 	suite.Require().NotPanics(func() { newKeeper() })
+}
+
+func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams() {
+	encCfg := encoding.MakeConfig(app.ModuleBasics)
+	cdc := encCfg.Codec
+	storeKey := sdk.NewKVStoreKey(types.ModuleName)
+	tKey := sdk.NewTransientStoreKey(types.TransientKey)
+	ctx := testutil.DefaultContext(storeKey, tKey)
+	ak := suite.app.AccountKeeper
+
+	// paramspace used only for setting legacy parameters (not given to keeper)
+	legacyParamstore := paramtypes.NewSubspace(
+		cdc,
+		encCfg.Amino,
+		storeKey,
+		tKey,
+		"evm",
+	).WithKeyTable(v2types.ParamKeyTable())
+
+	oldParams := v2types.DefaultParams()
+	// ensure this is set regardless of default param refactoring
+	mergeBlock := sdkmath.NewInt(9999)
+	oldParams.ChainConfig.MergeForkBlock = &mergeBlock
+	// set legacy params with merge block set
+	legacyParamstore.SetParamSet(ctx, &oldParams)
+
+	// new subspace for keeper, mimicking what a new binary would do
+	subspace := paramtypes.NewSubspace(
+		cdc,
+		encCfg.Amino,
+		storeKey,
+		tKey,
+		"evm",
+	)
+	k := keeper.NewKeeper(
+		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+		ak,
+		nil, nil, nil, nil,
+		geth.NewEVM,
+		"",
+		subspace,
+	)
+
+	params := k.GetParams(ctx)
+
+	suite.Require().Equal(params.ChainConfig.MergeNetsplitBlock, oldParams.ChainConfig.MergeForkBlock)
 }
