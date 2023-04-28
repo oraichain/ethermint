@@ -213,3 +213,31 @@ func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams(
 
 	suite.Require().Equal(params.ChainConfig.MergeNetsplitBlock, oldParams.ChainConfig.MergeForkBlock)
 }
+
+func (suite *KeeperTestSuite) TestNilLegacyParamsDoNotPanic() {
+	encCfg := encoding.MakeConfig(app.ModuleBasics)
+	cdc := encCfg.Codec
+	storeKey := sdk.NewKVStoreKey(types.ModuleName)
+	tKey := sdk.NewTransientStoreKey(types.TransientKey)
+	ctx := testutil.DefaultContext(storeKey, tKey)
+	ak := suite.app.AccountKeeper
+
+	subspace := paramtypes.NewSubspace(
+		cdc,
+		encCfg.Amino,
+		storeKey,
+		tKey,
+		"evm",
+	)
+
+	k := keeper.NewKeeper(
+		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+		ak,
+		nil, nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
+		geth.NewEVM,
+		"",
+		subspace,
+	)
+
+	suite.Require().NotPanics(func() { k.GetParams(ctx) })
+}
