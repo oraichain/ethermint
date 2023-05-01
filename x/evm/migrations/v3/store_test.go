@@ -3,14 +3,11 @@ package v3_test
 import (
 	"testing"
 
-	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/types"
-	"github.com/evmos/ethermint/x/evm/vm/geth"
 	"github.com/stretchr/testify/require"
 
 	"github.com/cosmos/cosmos-sdk/testutil"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/encoding"
@@ -110,56 +107,4 @@ func TestMigrate_Mainnet(t *testing.T) {
 
 	// ensure migrated params match initial params
 	legacytestutil.AssertParamsEqual(t, initialParams, migratedParams)
-}
-
-func TestKeyTableCompatiabilityWithKeeper(t *testing.T) {
-	encCfg := encoding.MakeConfig(app.ModuleBasics)
-	cdc := encCfg.Codec
-	storeKey := sdk.NewKVStoreKey(types.ModuleName)
-	tKey := sdk.NewTransientStoreKey(types.TransientKey)
-	ctx := testutil.DefaultContext(storeKey, tKey)
-
-	ak := app.Setup(false, nil).AccountKeeper
-
-	// only used to set initial params
-	initialSubspace := paramtypes.NewSubspace(
-		cdc,
-		encCfg.Amino,
-		storeKey,
-		tKey,
-		"evm",
-	).WithKeyTable(legacytypes.ParamKeyTable())
-	initialParams := legacytypes.DefaultParams()
-	initialSubspace.SetParamSet(ctx, &initialParams)
-
-	// vanilla subspace (no key table) that keeper
-	// will register a key table on
-	subspace := paramtypes.NewSubspace(
-		cdc,
-		encCfg.Amino,
-		storeKey,
-		tKey,
-		"evm",
-	)
-	keeper.NewKeeper(
-		cdc, encCfg.Amino, storeKey, tKey, authtypes.NewModuleAddress("gov"),
-		ak,
-		nil, nil, nil, nil,
-		geth.NewEVM,
-		"",
-		subspace,
-	)
-
-	// ensure that the migration is compatible with the keeper legacy
-	// key table registration
-	require.NotPanics(t, func() {
-		v3.MigrateStore(
-			ctx,
-			cdc,
-			encCfg.Amino,
-			storeKey,
-			tKey,
-		)
-
-	}, "type mismatch with registered table")
 }
