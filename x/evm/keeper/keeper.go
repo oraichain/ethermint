@@ -32,9 +32,9 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 
 	ethermint "github.com/evmos/ethermint/types"
-	v2types "github.com/evmos/ethermint/x/evm/migrations/v2/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
 	evm "github.com/evmos/ethermint/x/evm/vm"
 )
 
@@ -114,7 +114,7 @@ func NewKeeper(
 	}
 
 	if !ss.HasKeyTable() {
-		ss = ss.WithKeyTable(v2types.ParamKeyTable())
+		ss = ss.WithKeyTable(legacytypes.ParamKeyTable())
 	}
 
 	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
