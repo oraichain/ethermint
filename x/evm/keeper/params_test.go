@@ -231,7 +231,7 @@ func (suite *KeeperTestSuite) TestNilLegacyParamsDoNotPanic() {
 	)
 
 	k := keeper.NewKeeper(
-		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+		cdc, encCfg.Amino, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 		ak,
 		nil, nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 		geth.NewEVM,
