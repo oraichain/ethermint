@@ -18,13 +18,11 @@ package keeper
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	v3 "github.com/evmos/ethermint/x/evm/migrations/v3"
-	"github.com/evmos/ethermint/x/evm/types"
 )
 
 // Migrator is a struct for handling in-place store migrations.
 type Migrator struct {
-	keeper         Keeper
-	legacySubspace types.Subspace
+	keeper Keeper
 }
 
 // NewMigrator returns a new Migrator.
