@@ -5,8 +5,8 @@ import (
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	v2types "github.com/evmos/ethermint/x/evm/migrations/v2/types"
 	"github.com/evmos/ethermint/x/evm/types"
+	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
 )
 
 // MigrateStore runs the state migrations that includes upstream consensus
@@ -26,10 +26,10 @@ func MigrateStore(
 		storeKey,
 		transientKey,
 		types.ModuleName,
-	).WithKeyTable(v2types.ParamKeyTable())
+	).WithKeyTable(legacytypes.ParamKeyTable())
+	var legacyParams legacytypes.LegacyParams
 
 	// load existing legacy parameters
-	var legacyParams v2types.V2Params
 	paramstore.GetParamSetIfExists(ctx, &legacyParams)
 
 	// -------------------------------------------------------------------------
@@ -77,7 +77,7 @@ func MigrateStore(
 		EnableCall:          legacyParams.EnableCall,
 		ExtraEIPs:           legacyParams.ExtraEIPs,
 		ChainConfig:         newChainConfig,
-		EIP712AllowedMsgs:   MigrateEIP712AllowedMsgs(legacyParams.EIP712AllowedMsgs),
+		EIP712AllowedMsgs:   legacyParams.EIP712AllowedMsgs,
 		AllowUnprotectedTxs: false, // Upstream v1 to v2
 	}
 
@@ -93,42 +93,42 @@ func MigrateStore(
 
 // MigrateEIP712AllowedMsgs converts the old EIP712AllowedMsgs to the new one.
 // No changes, just a type conversion.
-func MigrateEIP712AllowedMsgs(old []v2types.V2EIP712AllowedMsg) []types.EIP712AllowedMsg {
-	new := make([]types.EIP712AllowedMsg, len(old))
-	for i, msg := range old {
-		new[i] = types.EIP712AllowedMsg{
-			MsgTypeUrl:       msg.MsgTypeUrl,
-			MsgValueTypeName: msg.MsgValueTypeName,
-			ValueTypes:       MigrateEIP712MsgAttrTypes(msg.ValueTypes),
-			NestedTypes:      MigrateNestedTypes(msg.NestedTypes),
-		}
-	}
-
-	return new
-}
-
-// MigrateEIP712MsgAttrTypes converts the old EIP712MsgAttrTypes to the new one.
-// No changes, just a type conversion.
-func MigrateEIP712MsgAttrTypes(old []v2types.V2EIP712MsgAttrType) []types.EIP712MsgAttrType {
-	new := make([]types.EIP712MsgAttrType, len(old))
-	for i, msg := range old {
-		// We can directly assign because of the same fields
-		new[i] = types.EIP712MsgAttrType(msg)
-	}
-
-	return new
-}
-
-// MigrateNestedTypes converts the old EIP712NestedMsgTypes to the new one.
-// No changes, just a type conversion.
-func MigrateNestedTypes(old []v2types.V2EIP712NestedMsgType) []types.EIP712NestedMsgType {
-	new := make([]types.EIP712NestedMsgType, len(old))
-	for i, msg := range old {
-		new[i] = types.EIP712NestedMsgType{
-			Name:  msg.Name,
-			Attrs: MigrateEIP712MsgAttrTypes(msg.Attrs),
-		}
-	}
-
-	return new
-}
+//func MigrateEIP712AllowedMsgs(old []v2types.V2EIP712AllowedMsg) []types.EIP712AllowedMsg {
+//	new := make([]types.EIP712AllowedMsg, len(old))
+//	for i, msg := range old {
+//		new[i] = types.EIP712AllowedMsg{
+//			MsgTypeUrl:       msg.MsgTypeUrl,
+//			MsgValueTypeName: msg.MsgValueTypeName,
+//			ValueTypes:       MigrateEIP712MsgAttrTypes(msg.ValueTypes),
+//			NestedTypes:      MigrateNestedTypes(msg.NestedTypes),
+//		}
+//	}
+//
+//	return new
+//}
+//
+//// MigrateEIP712MsgAttrTypes converts the old EIP712MsgAttrTypes to the new one.
+//// No changes, just a type conversion.
+//func MigrateEIP712MsgAttrTypes(old []v2types.V2EIP712MsgAttrType) []types.EIP712MsgAttrType {
+//	new := make([]types.EIP712MsgAttrType, len(old))
+//	for i, msg := range old {
+//		// We can directly assign because of the same fields
+//		new[i] = types.EIP712MsgAttrType(msg)
+//	}
+//
+//	return new
+//}
+//
+//// MigrateNestedTypes converts the old EIP712NestedMsgTypes to the new one.
+//// No changes, just a type conversion.
+//func MigrateNestedTypes(old []v2types.V2EIP712NestedMsgType) []types.EIP712NestedMsgType {
+//	new := make([]types.EIP712NestedMsgType, len(old))
+//	for i, msg := range old {
+//		new[i] = types.EIP712NestedMsgType{
+//			Name:  msg.Name,
+//			Attrs: MigrateEIP712MsgAttrTypes(msg.Attrs),
+//		}
+//	}
+//
+//	return new
+//}

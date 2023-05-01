@@ -17,9 +17,8 @@ package keeper
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	v2types "github.com/evmos/ethermint/x/evm/migrations/v2/types"
-	migrations "github.com/evmos/ethermint/x/evm/migrations/v3"
 	"github.com/evmos/ethermint/x/evm/types"
+	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
 )
 
 // GetParams returns the total set of evm parameters.
@@ -51,7 +50,7 @@ func (k Keeper) SetParams(ctx sdk.Context, params types.Params) error {
 
 // GetLegacyParams returns param set for version before migrate
 func (k Keeper) GetLegacyParams(ctx sdk.Context) types.Params {
-	var legacyParams v2types.V2Params
+	var legacyParams legacytypes.LegacyParams
 	k.ss.GetParamSetIfExists(ctx, &legacyParams)
 
 	newChainConfig := types.ChainConfig{
@@ -86,7 +85,7 @@ func (k Keeper) GetLegacyParams(ctx sdk.Context) types.Params {
 		EnableCall:          legacyParams.EnableCall,
 		ExtraEIPs:           legacyParams.ExtraEIPs,
 		ChainConfig:         newChainConfig,
-		EIP712AllowedMsgs:   migrations.MigrateEIP712AllowedMsgs(legacyParams.EIP712AllowedMsgs),
+		EIP712AllowedMsgs:   legacyParams.EIP712AllowedMsgs,
 		AllowUnprotectedTxs: false, // Upstream v1 to v2
 	}
 

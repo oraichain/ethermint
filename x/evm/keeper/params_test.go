@@ -11,8 +11,9 @@ import (
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/x/evm/keeper"
-	v2types "github.com/evmos/ethermint/x/evm/migrations/v2/types"
 	"github.com/evmos/ethermint/x/evm/types"
+	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
+	legacytestutil "github.com/evmos/ethermint/x/evm/types/legacy/testutil"
 	"github.com/evmos/ethermint/x/evm/vm/geth"
 )
 
@@ -124,8 +125,9 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 		storeKey,
 		tKey,
 		"evm",
-	).WithKeyTable(v2types.ParamKeyTable())
-	params := v2types.DefaultParams()
+	).WithKeyTable(legacytypes.ParamKeyTable())
+	params := legacytypes.DefaultParams()
+	params.EIP712AllowedMsgs = legacytestutil.TestEIP712AllowedMsgs
 	setParamSpace.SetParamSet(ctx, &params)
 
 	// param space that has not been created with a key table
@@ -144,7 +146,7 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	newKeeper := func() *keeper.Keeper {
 		// create a keeper, mimicking an app.go which has not registered the key table
 		return keeper.NewKeeper(
-			cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+			cdc, encCfg.Amino, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 			ak,
 			nil, nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 			geth.NewEVM,
@@ -159,10 +161,8 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	suite.Require().NotPanics(func() { fetchedParams = k.GetParams(ctx) })
 	// this modifies the internal data of the subspace, so we should see the key table registered
 	suite.Require().True(unregisteredSubspace.HasKeyTable())
-	// TODO: fix failing comparison now that we are setting true legacy parameters
-	// and can't compare with equal anymore
-	_ = fetchedParams // placeholder to minimize changes
-	//suite.Require().Equal(params, fetchedParams)
+	// ensure returned params are equal to the set legacy parameters
+	legacytestutil.AssertParamsEqual(suite.T(), params, fetchedParams)
 	// ensure we do not attempt to override any existing key tables to keep compatibility
 	// when passing a subpsace to the keeper that has already been used to work with parameters
 	suite.Require().NotPanics(func() { newKeeper() })
@@ -183,9 +183,9 @@ func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams(
 		storeKey,
 		tKey,
 		"evm",
-	).WithKeyTable(v2types.ParamKeyTable())
+	).WithKeyTable(legacytypes.ParamKeyTable())
 
-	oldParams := v2types.DefaultParams()
+	oldParams := legacytypes.DefaultParams()
 	// ensure this is set regardless of default param refactoring
 	mergeBlock := sdkmath.NewInt(9999)
 	oldParams.ChainConfig.MergeForkBlock = &mergeBlock
@@ -201,7 +201,7 @@ func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams(
 		"evm",
 	)
 	k := keeper.NewKeeper(
-		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+		cdc, encCfg.Amino, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 		ak,
 		nil, nil, nil, nil,
 		geth.NewEVM,
