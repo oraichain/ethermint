@@ -167,3 +167,45 @@ func TestKeyTableCompatiabilityWithKeeper(t *testing.T) {
 
 	}, "type mismatch with registered table")
 }
+
+func TestMigrationRegistersItsOwnKeyTable(t *testing.T) {
+	encCfg := encoding.MakeConfig(app.ModuleBasics)
+	cdc := encCfg.Codec
+
+	storeKey := sdk.NewKVStoreKey(types.ModuleName)
+	tKey := sdk.NewTransientStoreKey(types.TransientKey)
+	paramStoreKey := sdk.NewKVStoreKey(paramtypes.ModuleName)
+	paramStoreTKey := sdk.NewTransientStoreKey(paramtypes.TStoreKey)
+	ctx := legacytestutil.NewDBContext([]storetypes.StoreKey{storeKey, paramStoreKey}, []storetypes.StoreKey{tKey, paramStoreTKey})
+
+	// only used to set initial params
+	initialSubspace := paramtypes.NewSubspace(
+		cdc,
+		encCfg.Amino,
+		paramStoreKey,
+		paramStoreTKey,
+		"evm",
+	).WithKeyTable(legacytypes.ParamKeyTable())
+	initialParams := legacytypes.DefaultParams()
+	initialSubspace.SetParamSet(ctx, &initialParams)
+
+	// vanilla subspace (no key table) that MigrateStore
+	// will register a key table on
+	subspace := paramtypes.NewSubspace(
+		cdc,
+		encCfg.Amino,
+		paramStoreKey,
+		paramStoreTKey,
+		"evm",
+	)
+	// ensure that the migration is compatible with the keeper legacy
+	// key table registration
+	require.NotPanics(t, func() {
+		v3.MigrateStore(
+			ctx,
+			subspace,
+			storeKey,
+			cdc,
+		)
+	})
+}
