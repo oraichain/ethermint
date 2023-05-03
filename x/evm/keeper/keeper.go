@@ -42,8 +42,6 @@ import (
 type Keeper struct {
 	// Protobuf codec
 	cdc codec.BinaryCodec
-	// Amino Codec used for legacy parameters
-	legacyAmino *codec.LegacyAmino
 	// Store key required for the EVM Prefix KVStore. It is required by:
 	// - storing account's Storage State
 	// - storing account's Code
