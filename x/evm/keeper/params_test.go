@@ -4,7 +4,7 @@ import (
 	"reflect"
 
 	sdkmath "cosmossdk.io/math"
-	"github.com/cosmos/cosmos-sdk/testutil"
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
@@ -115,15 +115,17 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	cdc := encCfg.Codec
 	storeKey := sdk.NewKVStoreKey(types.ModuleName)
 	tKey := sdk.NewTransientStoreKey(types.TransientKey)
-	ctx := testutil.DefaultContext(storeKey, tKey)
+	paramStoreKey := sdk.NewKVStoreKey(paramtypes.ModuleName)
+	paramStoreTKey := sdk.NewTransientStoreKey(paramtypes.TStoreKey)
+	ctx := legacytestutil.NewDBContext([]storetypes.StoreKey{storeKey, paramStoreKey}, []storetypes.StoreKey{tKey, paramStoreTKey})
 	ak := suite.app.AccountKeeper
 
 	// paramspace used only for setting legacy parameters (not given to keeper)
 	setParamSpace := paramtypes.NewSubspace(
 		cdc,
 		encCfg.Amino,
-		storeKey,
-		tKey,
+		paramStoreKey,
+		paramStoreTKey,
 		"evm",
 	).WithKeyTable(legacytypes.ParamKeyTable())
 	params := legacytypes.DefaultParams()
@@ -134,8 +136,8 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	unregisteredSubspace := paramtypes.NewSubspace(
 		cdc,
 		encCfg.Amino,
-		storeKey,
-		tKey,
+		paramStoreKey,
+		paramStoreTKey,
 		"evm",
 	)
 
@@ -146,7 +148,7 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	newKeeper := func() *keeper.Keeper {
 		// create a keeper, mimicking an app.go which has not registered the key table
 		return keeper.NewKeeper(
-			cdc, encCfg.Amino, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+			cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 			ak,
 			nil, nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 			geth.NewEVM,
@@ -173,15 +175,17 @@ func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams(
 	cdc := encCfg.Codec
 	storeKey := sdk.NewKVStoreKey(types.ModuleName)
 	tKey := sdk.NewTransientStoreKey(types.TransientKey)
-	ctx := testutil.DefaultContext(storeKey, tKey)
+	paramStoreKey := sdk.NewKVStoreKey(paramtypes.ModuleName)
+	paramStoreTKey := sdk.NewTransientStoreKey(paramtypes.TStoreKey)
+	ctx := legacytestutil.NewDBContext([]storetypes.StoreKey{storeKey, paramStoreKey}, []storetypes.StoreKey{tKey, paramStoreTKey})
 	ak := suite.app.AccountKeeper
 
 	// paramspace used only for setting legacy parameters (not given to keeper)
 	legacyParamstore := paramtypes.NewSubspace(
 		cdc,
 		encCfg.Amino,
-		storeKey,
-		tKey,
+		paramStoreKey,
+		paramStoreTKey,
 		"evm",
 	).WithKeyTable(legacytypes.ParamKeyTable())
 
@@ -196,12 +200,12 @@ func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams(
 	subspace := paramtypes.NewSubspace(
 		cdc,
 		encCfg.Amino,
-		storeKey,
-		tKey,
+		paramStoreKey,
+		paramStoreTKey,
 		"evm",
 	)
 	k := keeper.NewKeeper(
-		cdc, encCfg.Amino, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 		ak,
 		nil, nil, nil, nil,
 		geth.NewEVM,
@@ -219,19 +223,21 @@ func (suite *KeeperTestSuite) TestNilLegacyParamsDoNotPanic() {
 	cdc := encCfg.Codec
 	storeKey := sdk.NewKVStoreKey(types.ModuleName)
 	tKey := sdk.NewTransientStoreKey(types.TransientKey)
-	ctx := testutil.DefaultContext(storeKey, tKey)
+	paramStoreKey := sdk.NewKVStoreKey(paramtypes.ModuleName)
+	paramStoreTKey := sdk.NewTransientStoreKey(paramtypes.TStoreKey)
+	ctx := legacytestutil.NewDBContext([]storetypes.StoreKey{storeKey, paramStoreKey}, []storetypes.StoreKey{tKey, paramStoreTKey})
 	ak := suite.app.AccountKeeper
 
 	subspace := paramtypes.NewSubspace(
 		cdc,
 		encCfg.Amino,
-		storeKey,
-		tKey,
+		paramStoreKey,
+		paramStoreTKey,
 		"evm",
 	)
 
 	k := keeper.NewKeeper(
-		cdc, encCfg.Amino, storeKey, tKey, authtypes.NewModuleAddress("gov"),
+		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 		ak,
 		nil, nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 		geth.NewEVM,

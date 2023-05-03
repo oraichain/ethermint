@@ -3,10 +3,37 @@ package testutil
 import (
 	"testing"
 
+	"github.com/cosmos/cosmos-sdk/store"
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/evmos/ethermint/x/evm/types"
 	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
 	"github.com/stretchr/testify/require"
+	"github.com/tendermint/tendermint/libs/log"
+	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
+	dbm "github.com/tendermint/tm-db"
 )
+
+// NewDefaultContext with multile mounted stores
+func NewDBContext(keys []storetypes.StoreKey, tkeys []storetypes.StoreKey) sdk.Context {
+	db := dbm.NewMemDB()
+	cms := store.NewCommitMultiStore(db)
+
+	for _, key := range keys {
+		cms.MountStoreWithDB(key, storetypes.StoreTypeIAVL, db)
+	}
+
+	for _, tkey := range tkeys {
+		cms.MountStoreWithDB(tkey, storetypes.StoreTypeTransient, db)
+	}
+
+	err := cms.LoadLatestVersion()
+	if err != nil {
+		panic(err)
+	}
+
+	return sdk.NewContext(cms, tmproto.Header{}, false, log.NewNopLogger())
+}
 
 func AssertParamsEqual(t *testing.T, legacyParams legacytypes.LegacyParams, params types.Params) {
 	//
