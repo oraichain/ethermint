@@ -297,7 +297,10 @@ func (b *Backend) GetTransactionByBlockNumberAndIndex(blockNum rpctypes.BlockNum
 // https://github.com/tendermint/tendermint/issues/6539
 func (b *Backend) GetTxByEthHash(hash common.Hash) (*ethermint.TxResult, error) {
 	if b.indexer != nil {
+		b.logger.Info("ETH indexer used: GetByTxHash", "hash", hash.Hex())
 		return b.indexer.GetByTxHash(hash)
+	} else {
+		b.logger.Info("ETH indexer NOT used: GetByTxHash", "hash", hash.Hex())
 	}
 
 	// fallback to tendermint tx indexer
@@ -314,7 +317,10 @@ func (b *Backend) GetTxByEthHash(hash common.Hash) (*ethermint.TxResult, error) 
 // GetTxByTxIndex uses `/tx_query` to find transaction by tx index of valid ethereum txs
 func (b *Backend) GetTxByTxIndex(height int64, index uint) (*ethermint.TxResult, error) {
 	if b.indexer != nil {
+		b.logger.Info("ETH indexer used: GetTxByTxIndex", "height", height, "index", index)
 		return b.indexer.GetByBlockAndIndex(height, int32(index))
+	} else {
+		b.logger.Info("ETH indexer NOT used: GetTxByTxIndex", "height", height, "index", index)
 	}
 
 	// fallback to tendermint tx indexer
