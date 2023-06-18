@@ -69,6 +69,9 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 
 	// record index of valid eth tx during the iteration
 	var ethTxIndex int32
+	if len(block.Txs) == 0 {
+		fmt.Printf("IndexBlock: %d - Skipped because no transactions in block\n", block.Height)
+	}
 	for txIndex, tx := range block.Txs {
 		result := txResults[txIndex]
 		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(result) {
