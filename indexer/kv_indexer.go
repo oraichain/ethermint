@@ -84,6 +84,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 		}
 
 		if !isEthTx(tx) {
+			fmt.Printf("IndexBlock: %d, %d - Skipped because not eth tx\n", block.Height, txIndex)
 			continue
 		}
 
