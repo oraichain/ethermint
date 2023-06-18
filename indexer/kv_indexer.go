@@ -69,32 +69,25 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 
 	// record index of valid eth tx during the iteration
 	var ethTxIndex int32
-	if len(block.Txs) == 0 {
-		fmt.Printf("IndexBlock: %d - Skipped because no transactions in block\n", block.Height)
-	}
 	for txIndex, tx := range block.Txs {
 		result := txResults[txIndex]
 		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(result) {
-			fmt.Printf("IndexBlock: %d, %d - Skipped because tx failed or exceeds gas\n", block.Height, txIndex)
 			continue
 		}
 
 		tx, err := kv.clientCtx.TxConfig.TxDecoder()(tx)
 		if err != nil {
 			kv.logger.Error("Fail to decode tx", "err", err, "block", height, "txIndex", txIndex)
-			fmt.Printf("IndexBlock: %d, %d - Skipped because failed to decode tx\n", block.Height, txIndex)
 			continue
 		}
 
 		if !isEthTx(tx) {
-			fmt.Printf("IndexBlock: %d, %d - Skipped because not eth tx\n", block.Height, txIndex)
 			continue
 		}
 
 		txs, err := rpctypes.ParseTxResult(result, tx)
 		if err != nil {
 			kv.logger.Error("Fail to parse event", "err", err, "block", height, "txIndex", txIndex)
-			fmt.Printf("IndexBlock: %d - Skipped because failed to parse event\n", block.Height)
 			continue
 		}
 
@@ -118,7 +111,6 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 				parsedTx := txs.GetTxByMsgIndex(msgIndex)
 				if parsedTx == nil {
 					kv.logger.Error("msg index not found in events", "msgIndex", msgIndex)
-					fmt.Printf("IndexBlock: %d - Skipped because msg index (%d) not found in events\n", block.Height, msgIndex)
 					continue
 				}
 				if parsedTx.EthTxIndex >= 0 && parsedTx.EthTxIndex != ethTxIndex {
@@ -135,7 +127,6 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 			if err := saveTxResult(kv.clientCtx.Codec, batch, txHash, &txResult); err != nil {
 				return errorsmod.Wrapf(err, "IndexBlock %d", height)
 			}
-			fmt.Printf("IndexBlock: %d, EthTxIndex: %d", block.Height, txResult.EthTxIndex)
 		}
 	}
 	if err := batch.Write(); err != nil {
