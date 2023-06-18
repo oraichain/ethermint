@@ -132,6 +132,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 			if err := saveTxResult(kv.clientCtx.Codec, batch, txHash, &txResult); err != nil {
 				return errorsmod.Wrapf(err, "IndexBlock %d", height)
 			}
+			fmt.Printf("IndexBlock: %d, EthTxIndex: %d", block.Height, txResult.EthTxIndex)
 		}
 	}
 	if err := batch.Write(); err != nil {
