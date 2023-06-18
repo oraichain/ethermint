@@ -90,7 +90,7 @@ func NewIndexTxCmd() *cobra.Command {
 				if err := idxer.IndexBlock(blk, resBlk.DeliverTxs); err != nil {
 					return err
 				}
-				fmt.Printf("%s: %d", time.Now().Format(time.RFC3339), height)
+				fmt.Printf("%s: %d\n", time.Now().Format(time.RFC3339), height)
 				return nil
 			}
 
