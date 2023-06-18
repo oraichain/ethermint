@@ -17,6 +17,7 @@ package server
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -89,7 +90,7 @@ func NewIndexTxCmd() *cobra.Command {
 				if err := idxer.IndexBlock(blk, resBlk.DeliverTxs); err != nil {
 					return err
 				}
-				fmt.Println(height)
+				fmt.Printf("%s: %d", time.Now().Format(time.RFC3339), height)
 				return nil
 			}
 

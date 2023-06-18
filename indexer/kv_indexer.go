@@ -72,12 +72,14 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 	for txIndex, tx := range block.Txs {
 		result := txResults[txIndex]
 		if !rpctypes.TxSuccessOrExceedsBlockGasLimit(result) {
+			fmt.Printf("IndexBlock: %d, %d - Skipped because tx failed or exceeds gas\n", block.Height, txIndex)
 			continue
 		}
 
 		tx, err := kv.clientCtx.TxConfig.TxDecoder()(tx)
 		if err != nil {
 			kv.logger.Error("Fail to decode tx", "err", err, "block", height, "txIndex", txIndex)
+			fmt.Printf("IndexBlock: %d, %d - Skipped because failed to decode tx\n", block.Height, txIndex)
 			continue
 		}
 
@@ -88,6 +90,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 		txs, err := rpctypes.ParseTxResult(result, tx)
 		if err != nil {
 			kv.logger.Error("Fail to parse event", "err", err, "block", height, "txIndex", txIndex)
+			fmt.Printf("IndexBlock: %d - Skipped because failed to parse event\n", block.Height)
 			continue
 		}
 
@@ -111,6 +114,7 @@ func (kv *KVIndexer) IndexBlock(block *tmtypes.Block, txResults []*abci.Response
 				parsedTx := txs.GetTxByMsgIndex(msgIndex)
 				if parsedTx == nil {
 					kv.logger.Error("msg index not found in events", "msgIndex", msgIndex)
+					fmt.Printf("IndexBlock: %d - Skipped because msg index (%d) not found in events\n", block.Height, msgIndex)
 					continue
 				}
 				if parsedTx.EthTxIndex >= 0 && parsedTx.EthTxIndex != ethTxIndex {
