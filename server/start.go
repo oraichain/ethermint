@@ -14,6 +14,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 
 	"google.golang.org/grpc"
@@ -46,9 +47,19 @@ import (
 	srvflags "github.com/tharsis/ethermint/server/flags"
 )
 
+// DBOpener is a function to open `application.db`, potentially with customized options.
+type DBOpener func(opts types.AppOptions, rootDir string, backend dbm.BackendType) (dbm.DB, error)
+
+// StartOptions defines options that can be customized in `StartCmd`
+type StartOptions struct {
+	AppCreator      types.AppCreator
+	DefaultNodeHome string
+	DBOpener        DBOpener
+}
+
 // StartCmd runs the service passed in, either stand-alone or in-process with
 // Tendermint.
-func StartCmd(appCreator types.AppCreator, defaultNodeHome string) *cobra.Command {
+func StartCmd(opts StartOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Run the full node",
@@ -97,7 +108,7 @@ which accepts a path for the resulting pprof file.
 			withTM, _ := cmd.Flags().GetBool(srvflags.WithTendermint)
 			if !withTM {
 				serverCtx.Logger.Info("starting ABCI without Tendermint")
-				return startStandAlone(serverCtx, appCreator)
+				return startStandAlone(serverCtx, opts)
 			}
 
 			serverCtx.Logger.Info("Unlocking keyring")
@@ -114,7 +125,7 @@ which accepts a path for the resulting pprof file.
 			serverCtx.Logger.Info("starting ABCI with Tendermint")
 
 			// amino is needed here for backwards compatibility of REST routes
-			err = startInProcess(serverCtx, clientCtx, appCreator)
+			err = startInProcess(serverCtx, clientCtx, opts)
 			errCode, ok := err.(server.ErrorCode)
 			if !ok {
 				return err
@@ -125,7 +136,7 @@ which accepts a path for the resulting pprof file.
 		},
 	}
 
-	cmd.Flags().String(flags.FlagHome, defaultNodeHome, "The application home directory")
+	cmd.Flags().String(flags.FlagHome, opts.DefaultNodeHome, "The application home directory")
 	cmd.Flags().Bool(srvflags.WithTendermint, true, "Run abci app embedded in-process with tendermint")
 	cmd.Flags().String(srvflags.Address, "tcp://0.0.0.0:26658", "Listen address")
 	cmd.Flags().String(srvflags.Transport, "socket", "Transport protocol: socket, grpc")
@@ -179,12 +190,12 @@ which accepts a path for the resulting pprof file.
 	return cmd
 }
 
-func startStandAlone(ctx *server.Context, appCreator types.AppCreator) error {
+func startStandAlone(ctx *server.Context, opts StartOptions) error {
 	addr := ctx.Viper.GetString(srvflags.Address)
 	transport := ctx.Viper.GetString(srvflags.Transport)
 	home := ctx.Viper.GetString(flags.FlagHome)
 
-	db, err := openDB(home)
+	db, err := opts.DBOpener(ctx.Viper, home, getAppDBBackend(ctx.Viper))
 	if err != nil {
 		return err
 	}
@@ -200,7 +211,7 @@ func startStandAlone(ctx *server.Context, appCreator types.AppCreator) error {
 		return err
 	}
 
-	app := appCreator(ctx.Logger, db, traceWriter, ctx.Viper)
+	app := opts.AppCreator(ctx.Logger, db, traceWriter, ctx.Viper)
 
 	svr, err := abciserver.NewServer(addr, transport, app)
 	if err != nil {
@@ -225,7 +236,7 @@ func startStandAlone(ctx *server.Context, appCreator types.AppCreator) error {
 }
 
 // legacyAminoCdc is used for the legacy REST API
-func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator types.AppCreator) (err error) {
+func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOptions) (err error) {
 	cfg := ctx.Config
 	home := cfg.RootDir
 	logger := ctx.Logger
@@ -259,7 +270,8 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	}
 
 	traceWriterFile := ctx.Viper.GetString(srvflags.TraceStore)
-	db, err := openDB(home)
+
+	db, err := opts.DBOpener(ctx.Viper, home, getAppDBBackend(ctx.Viper))
 	if err != nil {
 		logger.Error("failed to open DB", "error", err.Error())
 		return err
@@ -290,7 +302,7 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 		}
 	}
 
-	app := appCreator(ctx.Logger, db, traceWriter, ctx.Viper)
+	app := opts.AppCreator(ctx.Logger, db, traceWriter, ctx.Viper)
 
 	nodeKey, err := p2p.LoadOrGenNodeKey(cfg.NodeKeyFile())
 	if err != nil {
@@ -492,4 +504,18 @@ func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
 		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
 		0o600,
 	)
+}
+
+// getAppDBBackend gets the backend type to use for the application DBs.
+// NOTE: getAppDBBackend is backported from newer versions of cosmos-sdk
+func getAppDBBackend(opts types.AppOptions) dbm.BackendType {
+	rv := cast.ToString(opts.Get("app-db-backend"))
+	if len(rv) == 0 {
+		rv = cast.ToString(opts.Get("db_backend"))
+	}
+	if len(rv) != 0 {
+		return dbm.BackendType(rv)
+	}
+
+	return dbm.GoLevelDBBackend
 }
