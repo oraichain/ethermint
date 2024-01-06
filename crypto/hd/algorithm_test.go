@@ -1,14 +1,13 @@
 package hd
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
-
-	hdwallet "github.com/miguelmota/go-ethereum-hdwallet"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
@@ -57,10 +56,12 @@ func TestKeyring(t *testing.T) {
 	privkey := EthSecp256k1.Generate()(bz)
 	addr := common.BytesToAddress(privkey.PubKey().Address().Bytes())
 
-	wallet, err := hdwallet.NewFromMnemonic(mnemonic)
+	os.Setenv(hdWalletFixEnv, "true")
+	wallet, err := NewFromMnemonic(mnemonic)
+	os.Setenv(hdWalletFixEnv, "")
 	require.NoError(t, err)
 
-	path := hdwallet.MustParseDerivationPath(hdPath)
+	path := MustParseDerivationPath(hdPath)
 
 	account, err := wallet.Derive(path, false)
 	require.NoError(t, err)
@@ -83,14 +84,14 @@ func TestDerivation(t *testing.T) {
 
 	require.False(t, privkey.Equals(badPrivKey))
 
-	wallet, err := hdwallet.NewFromMnemonic(mnemonic)
+	wallet, err := NewFromMnemonic(mnemonic)
 	require.NoError(t, err)
 
-	path := hdwallet.MustParseDerivationPath(ethermint.BIP44HDPath)
+	path := MustParseDerivationPath(ethermint.BIP44HDPath)
 	account, err := wallet.Derive(path, false)
 	require.NoError(t, err)
 
-	badPath := hdwallet.MustParseDerivationPath("44'/60'/0'/0/0")
+	badPath := MustParseDerivationPath("44'/60'/0'/0/0")
 	badAccount, err := wallet.Derive(badPath, false)
 	require.NoError(t, err)
 
