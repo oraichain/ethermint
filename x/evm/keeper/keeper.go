@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
 )
@@ -273,7 +272,7 @@ func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainCo
 
 // GetAccountWithoutBalance load nonce and codehash without balance,
 // more efficient in cases where balance is not needed.
-func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) *statedb.Account {
+func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) *types.StateDBAccount {
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
@@ -286,21 +285,21 @@ func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) 
 		codeHash = ethAcct.GetCodeHash().Bytes()
 	}
 
-	return &statedb.Account{
+	return &types.StateDBAccount{
 		Nonce:    acct.GetSequence(),
 		CodeHash: codeHash,
 	}
 }
 
 // GetAccountOrEmpty returns empty account if not exist, returns error if it's not `EthAccount`
-func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) statedb.Account {
+func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) types.StateDBAccount {
 	acct := k.GetAccount(ctx, addr)
 	if acct != nil {
 		return *acct
 	}
 
 	// empty account
-	return statedb.Account{
+	return types.StateDBAccount{
 		Balance:  new(big.Int),
 		CodeHash: types.EmptyCodeHash,
 	}

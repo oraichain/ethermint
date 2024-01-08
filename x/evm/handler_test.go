@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/evmos/ethermint/x/evm/vm"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/gogo/protobuf/proto"
@@ -181,8 +182,8 @@ func (suite *EvmTestSuite) SignTx(tx *types.MsgEthereumTx) {
 	suite.Require().NoError(err)
 }
 
-func (suite *EvmTestSuite) StateDB() *statedb.StateDB {
-	return statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash().Bytes())))
+func (suite *EvmTestSuite) StateDB() vm.StateDB {
+	return statedb.New(suite.ctx, suite.app.EvmKeeper, types.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash().Bytes())))
 }
 
 func TestEvmTestSuite(t *testing.T) {

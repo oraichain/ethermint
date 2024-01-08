@@ -266,7 +266,7 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
 	}
 
-	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
+	txConfig := types.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
 	return k.ApplyMessageWithConfig(ctx, msg, tracer, commit, cfg, txConfig)
 }
 
@@ -313,7 +313,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	tracer vm.EVMLogger,
 	commit bool,
 	cfg *statedb.EVMConfig,
-	txConfig statedb.TxConfig,
+	txConfig types.TxConfig,
 ) (*types.MsgEthereumTxResponse, error) {
 	var (
 		ret   []byte // return bytes from evm execution
@@ -327,7 +327,7 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	stateDB := statedb.New(ctx, k, txConfig)
+	stateDB := k.stateDBConstructor(ctx, k, txConfig)
 	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
 
 	leftoverGas := msg.Gas()
