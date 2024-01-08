@@ -40,7 +40,7 @@ type DynamicFeeEVMKeeper interface {
 
 // EVMKeeper defines the expected keeper interface used on the Eth AnteHandler
 type EVMKeeper interface {
-	statedb.Keeper
+	evm.StateDBKeeper
 	DynamicFeeEVMKeeper
 
 	NewEVM(ctx sdk.Context, msg core.Message, cfg *statedb.EVMConfig, tracer vm.EVMLogger, stateDB vm.StateDB) *vm.EVM
