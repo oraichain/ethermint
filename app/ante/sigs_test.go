@@ -4,7 +4,7 @@ import (
 	"math/big"
 
 	"github.com/evmos/ethermint/tests"
-	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 )
 
@@ -15,7 +15,7 @@ func (suite AnteTestSuite) TestSignatures() {
 	addr, privKey := tests.NewAddrKey()
 	to := tests.GenerateAddress()
 
-	acc := statedb.NewEmptyAccount()
+	acc := types.NewEmptyAccount()
 	acc.Nonce = 1
 	acc.Balance = big.NewInt(10000000000)
 
