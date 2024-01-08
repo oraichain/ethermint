@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/evmos/ethermint/x/evm/vm/geth"
 	"github.com/stretchr/testify/require"
@@ -151,6 +152,7 @@ func TestKeyTableCompatiabilityWithKeeper(t *testing.T) {
 		ak,
 		nil, nil, nil, nil,
 		geth.NewEVM,
+		statedb.New,
 		"",
 		subspace,
 	)

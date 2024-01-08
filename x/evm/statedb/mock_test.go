@@ -9,16 +9,18 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/evmos/ethermint/x/evm/vm"
 )
 
 var (
-	_             statedb.Keeper = &MockKeeper{}
-	errAddress    common.Address = common.BigToAddress(big.NewInt(100))
-	emptyCodeHash                = crypto.Keccak256(nil)
+	_             vm.StateDBKeeper = &MockKeeper{}
+	errAddress    common.Address   = common.BigToAddress(big.NewInt(100))
+	emptyCodeHash                  = crypto.Keccak256(nil)
 )
 
 type MockAcount struct {
-	account statedb.Account
+	account types.StateDBAccount
 	states  statedb.Storage
 }
 
@@ -34,7 +36,7 @@ func NewMockKeeper() *MockKeeper {
 	}
 }
 
-func (k MockKeeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
+func (k MockKeeper) GetAccount(ctx sdk.Context, addr common.Address) *types.StateDBAccount {
 	acct, ok := k.accounts[addr]
 	if !ok {
 		return nil
@@ -60,7 +62,7 @@ func (k MockKeeper) ForEachStorage(ctx sdk.Context, addr common.Address, cb func
 	}
 }
 
-func (k MockKeeper) SetAccount(ctx sdk.Context, addr common.Address, account statedb.Account) error {
+func (k MockKeeper) SetAccount(ctx sdk.Context, addr common.Address, account types.StateDBAccount) error {
 	if addr == errAddress {
 		return errors.New("mock db error")
 	}

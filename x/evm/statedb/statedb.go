@@ -26,6 +26,8 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/evmos/ethermint/x/evm/types"
+	evm "github.com/evmos/ethermint/x/evm/vm"
 )
 
 // revision is the identifier of a version of state.
@@ -44,7 +46,7 @@ var _ vm.StateDB = &StateDB{}
 // * Contracts
 // * Accounts
 type StateDB struct {
-	keeper Keeper
+	keeper evm.StateDBKeeper
 	ctx    sdk.Context
 
 	// Journal of state modifications. This is the backbone of
@@ -55,7 +57,7 @@ type StateDB struct {
 
 	stateObjects map[common.Address]*stateObject
 
-	txConfig TxConfig
+	txConfig types.TxConfig
 
 	// The refund counter, also used by state transitioning.
 	refund uint64
@@ -68,7 +70,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
+func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm.StateDB {
 	return &StateDB{
 		keeper:       keeper,
 		ctx:          ctx,
@@ -81,7 +83,7 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 }
 
 // Keeper returns the underlying `Keeper`
-func (s *StateDB) Keeper() Keeper {
+func (s *StateDB) Keeper() evm.StateDBKeeper {
 	return s.keeper
 }
 
@@ -246,7 +248,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getStateObject(addr)
 
-	newobj = newObject(s, addr, Account{})
+	newobj = newObject(s, addr, types.StateDBAccount{})
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {

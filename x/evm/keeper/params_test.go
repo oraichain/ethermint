@@ -11,6 +11,7 @@ import (
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/encoding"
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
 	legacytestutil "github.com/evmos/ethermint/x/evm/types/legacy/testutil"
@@ -152,6 +153,7 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 			ak,
 			nil, nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 			geth.NewEVM,
+			statedb.New,
 			"",
 			unregisteredSubspace,
 		)
@@ -209,6 +211,7 @@ func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams(
 		ak,
 		nil, nil, nil, nil,
 		geth.NewEVM,
+		statedb.New,
 		"",
 		subspace,
 	)
@@ -241,6 +244,7 @@ func (suite *KeeperTestSuite) TestNilLegacyParamsDoNotPanic() {
 		ak,
 		nil, nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 		geth.NewEVM,
+		statedb.New,
 		"",
 		subspace,
 	)

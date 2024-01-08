@@ -9,8 +9,8 @@ import (
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	etherminttypes "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/evmos/ethermint/x/evm/vm"
 )
 
 func (suite *EvmTestSuite) TestInitGenesis() {
@@ -19,7 +19,7 @@ func (suite *EvmTestSuite) TestInitGenesis() {
 
 	address := common.HexToAddress(privkey.PubKey().Address().String())
 
-	var vmdb *statedb.StateDB
+	var vmdb vm.StateDB
 
 	testCases := []struct {
 		name     string

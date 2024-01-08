@@ -32,7 +32,6 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	legacytypes "github.com/evmos/ethermint/x/evm/types/legacy"
 	evm "github.com/evmos/ethermint/x/evm/vm"
@@ -77,6 +76,10 @@ type Keeper struct {
 
 	// evm constructor function
 	evmConstructor evm.Constructor
+
+	// stateDB constructor function
+	stateDBConstructor evm.StateDBConstructor
+
 	// Legacy subspace
 	ss paramstypes.Subspace
 }
@@ -92,6 +95,7 @@ func NewKeeper(
 	fmk types.FeeMarketKeeper,
 	customPrecompiles evm.PrecompiledContracts,
 	evmConstructor evm.Constructor,
+	stateDBConstructor evm.StateDBConstructor,
 	tracer string,
 	ss paramstypes.Subspace,
 ) *Keeper {
@@ -111,18 +115,19 @@ func NewKeeper(
 
 	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
 	return &Keeper{
-		cdc:               cdc,
-		authority:         authority,
-		accountKeeper:     ak,
-		bankKeeper:        bankKeeper,
-		stakingKeeper:     sk,
-		feeMarketKeeper:   fmk,
-		storeKey:          storeKey,
-		transientKey:      transientKey,
-		customPrecompiles: customPrecompiles,
-		evmConstructor:    evmConstructor,
-		tracer:            tracer,
-		ss:                ss,
+		cdc:                cdc,
+		authority:          authority,
+		accountKeeper:      ak,
+		bankKeeper:         bankKeeper,
+		stakingKeeper:      sk,
+		feeMarketKeeper:    fmk,
+		storeKey:           storeKey,
+		transientKey:       transientKey,
+		customPrecompiles:  customPrecompiles,
+		evmConstructor:     evmConstructor,
+		stateDBConstructor: stateDBConstructor,
+		tracer:             tracer,
+		ss:                 ss,
 	}
 }
 
@@ -279,7 +284,7 @@ func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainCo
 
 // GetAccountWithoutBalance load nonce and codehash without balance,
 // more efficient in cases where balance is not needed.
-func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) *statedb.Account {
+func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) *types.StateDBAccount {
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
@@ -292,21 +297,21 @@ func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) 
 		codeHash = ethAcct.GetCodeHash().Bytes()
 	}
 
-	return &statedb.Account{
+	return &types.StateDBAccount{
 		Nonce:    acct.GetSequence(),
 		CodeHash: codeHash,
 	}
 }
 
 // GetAccountOrEmpty returns empty account if not exist, returns error if it's not `EthAccount`
-func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) statedb.Account {
+func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) types.StateDBAccount {
 	acct := k.GetAccount(ctx, addr)
 	if acct != nil {
 		return *acct
 	}
 
 	// empty account
-	return statedb.Account{
+	return types.StateDBAccount{
 		Balance:  new(big.Int),
 		CodeHash: types.EmptyCodeHash,
 	}

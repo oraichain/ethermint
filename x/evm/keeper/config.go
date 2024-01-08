@@ -48,8 +48,8 @@ func (k *Keeper) EVMConfig(ctx sdk.Context, proposerAddress sdk.ConsAddress, cha
 }
 
 // TxConfig loads `TxConfig` from current transient storage
-func (k *Keeper) TxConfig(ctx sdk.Context, txHash common.Hash) statedb.TxConfig {
-	return statedb.NewTxConfig(
+func (k *Keeper) TxConfig(ctx sdk.Context, txHash common.Hash) types.TxConfig {
+	return types.NewTxConfig(
 		common.BytesToHash(ctx.HeaderHash()), // BlockHash
 		txHash,                               // TxHash
 		uint(k.GetTxIndexTransient(ctx)),     // TxIndex

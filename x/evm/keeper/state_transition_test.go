@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/x/evm/keeper"
@@ -574,8 +575,8 @@ func (suite *KeeperTestSuite) TestApplyMessageWithConfig() {
 		config          *statedb.EVMConfig
 		keeperParams    types.Params
 		signer          ethtypes.Signer
-		vmdb            *statedb.StateDB
-		txConfig        statedb.TxConfig
+		vmdb            vm.StateDB
+		txConfig        types.TxConfig
 		chainCfg        *params.ChainConfig
 	)
 

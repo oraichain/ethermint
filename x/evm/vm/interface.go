@@ -18,7 +18,11 @@ package vm
 import (
 	"math/big"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/evmos/ethermint/x/evm/types"
+
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/holiman/uint256"
@@ -79,3 +83,43 @@ type Constructor func(
 	config vm.Config,
 	customPrecompiles PrecompiledContracts,
 ) EVM
+
+// StateDBKeeper provide underlying storage of StateDB
+type StateDBKeeper interface {
+	// Read methods
+	GetAccount(ctx sdk.Context, addr common.Address) *types.StateDBAccount
+	GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash
+	GetCode(ctx sdk.Context, codeHash common.Hash) []byte
+	// the callback returns false to break early
+	ForEachStorage(ctx sdk.Context, addr common.Address, cb func(key, value common.Hash) bool)
+
+	// Write methods, only called by `StateDB.Commit()`
+	SetAccount(ctx sdk.Context, addr common.Address, account types.StateDBAccount) error
+	SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte)
+	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
+	DeleteAccount(ctx sdk.Context, addr common.Address) error
+}
+
+type StateDB interface {
+	vm.StateDB
+
+	Keeper() StateDBKeeper
+
+	// Additional methods required by x/evm Keeper
+	Commit() error
+	Logs() []*ethtypes.Log
+}
+
+// TxConfig provides readonly information of current tx for `StateDB`.
+type TxConfig interface {
+	BlockHash() common.Hash // hash of current block
+	TxHash() common.Hash    // hash of current tx
+	TxIndex() uint          // the index of current transaction
+	LogIndex() uint         // the index of next log within current block
+}
+
+type StateDBConstructor func(
+	ctx sdk.Context,
+	keeper StateDBKeeper,
+	txConfig types.TxConfig,
+) StateDB
