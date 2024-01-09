@@ -40,7 +40,6 @@ import (
 	servergrpc "github.com/cosmos/cosmos-sdk/server/grpc"
 	"github.com/cosmos/cosmos-sdk/server/types"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	ethdebug "github.com/tharsis/ethermint/rpc/ethereum/namespaces/debug"
 	"github.com/tharsis/ethermint/server/config"
@@ -55,6 +54,15 @@ type StartOptions struct {
 	AppCreator      types.AppCreator
 	DefaultNodeHome string
 	DBOpener        DBOpener
+}
+
+// NewDefaultStartOptions use the default db opener provided in tm-db.
+func NewDefaultStartOptions(appCreator types.AppCreator, defaultNodeHome string) StartOptions {
+	return StartOptions{
+		AppCreator:      appCreator,
+		DefaultNodeHome: defaultNodeHome,
+		DBOpener:        openDB,
+	}
 }
 
 // StartCmd runs the service passed in, either stand-alone or in-process with
@@ -492,9 +500,9 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOpt
 	return server.WaitForQuitSignals()
 }
 
-func openDB(rootDir string) (dbm.DB, error) {
+func openDB(_ types.AppOptions, rootDir string, backendType dbm.BackendType) (dbm.DB, error) {
 	dataDir := filepath.Join(rootDir, "data")
-	return sdk.NewLevelDB("application", dataDir)
+	return dbm.NewDB("application", backendType, dataDir)
 }
 
 func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
