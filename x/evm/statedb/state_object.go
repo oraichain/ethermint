@@ -136,7 +136,7 @@ func (s *stateObject) Code() []byte {
 	if bytes.Equal(s.CodeHash(), emptyCodeHash) {
 		return nil
 	}
-	code := s.db.keeper.GetCode(s.db.ctx, common.BytesToHash(s.CodeHash()))
+	code := s.db.keeper.GetCode(s.db.currentCtx, common.BytesToHash(s.CodeHash()))
 	s.code = code
 	return code
 }
@@ -198,7 +198,7 @@ func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
 		return value
 	}
 	// If no live objects are available, load it from keeper
-	value := s.db.keeper.GetState(s.db.ctx, s.Address(), key)
+	value := s.db.keeper.GetState(s.db.currentCtx, s.Address(), key)
 	s.originStorage[key] = value
 	return value
 }

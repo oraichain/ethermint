@@ -38,6 +38,12 @@ type revision struct {
 	journalIndex int
 }
 
+type ctxSnapshot struct {
+	id    int
+	ctx   sdk.Context
+	write func()
+}
+
 var _ vm.StateDB = &StateDB{}
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -47,7 +53,15 @@ var _ vm.StateDB = &StateDB{}
 // * Accounts
 type StateDB struct {
 	keeper evm.StateDBKeeper
-	ctx    sdk.Context
+
+	// Current currentCtx of the state -- branched on creation and each snapshot
+	currentCtx sdk.Context
+
+	// Current currentCtxWrite of the state -- calling will apply the state changes to
+	// the parent ctx
+	currentCtxWrite func()
+
+	ctxSnapshots []ctxSnapshot
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -71,15 +85,25 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm.StateDB {
-	return &StateDB{
-		keeper:       keeper,
-		ctx:          ctx,
+	statedb := &StateDB{
+		keeper:          keeper,
+		currentCtx:      ctx,
+		currentCtxWrite: nil,
+
+		ctxSnapshots: []ctxSnapshot{},
+
 		stateObjects: make(map[common.Address]*stateObject),
 		journal:      newJournal(),
 		accessList:   newAccessList(),
 
 		txConfig: txConfig,
 	}
+
+	// Create an initial cache ctx branch so we don't modify parent Context
+	// without calling Commit()
+	_ = statedb.Snapshot()
+
+	return statedb
 }
 
 // Keeper returns the underlying `Keeper`
@@ -224,7 +248,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		return obj
 	}
 	// If no live objects are available, load it from keeper
-	account := s.keeper.GetAccount(s.ctx, addr)
+	account := s.keeper.GetAccount(s.currentCtx, addr)
 	if account == nil {
 		return nil
 	}
@@ -284,7 +308,7 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 	if so == nil {
 		return nil
 	}
-	s.keeper.ForEachStorage(s.ctx, addr, func(key, value common.Hash) bool {
+	s.keeper.ForEachStorage(s.currentCtx, addr, func(key, value common.Hash) bool {
 		if value, dirty := so.dirtyStorage[key]; dirty {
 			return cb(key, value)
 		}
@@ -431,39 +455,74 @@ func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionID
 	s.nextRevisionID++
 	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
+
+	// Save the current context (cached multi-store and events) + write function
+	// to apply the snapshot to the parent store
+	s.ctxSnapshots = append(s.ctxSnapshots, ctxSnapshot{
+		id:    id,
+		ctx:   s.currentCtx,
+		write: s.currentCtxWrite,
+	})
+
+	// Branch off a new CacheMultiStore + write function
+	newCtx, write := s.currentCtx.CacheContext()
+
+	// Update ctx to the new branch
+	s.currentCtx = newCtx
+	s.currentCtxWrite = write
+
 	return id
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
 func (s *StateDB) RevertToSnapshot(revid int) {
 	// Find the snapshot in the stack of valid snapshots.
-	idx := sort.Search(len(s.validRevisions), func(i int) bool {
-		return s.validRevisions[i].id >= revid
+	idx := sort.Search(len(s.ctxSnapshots), func(i int) bool {
+		return s.ctxSnapshots[i].id >= revid
 	})
-	if idx == len(s.validRevisions) || s.validRevisions[idx].id != revid {
+
+	if idx == len(s.ctxSnapshots) || s.ctxSnapshots[idx].id != revid {
 		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
 	}
-	snapshot := s.validRevisions[idx].journalIndex
 
-	// Replay the journal to undo changes and remove invalidated snapshots
-	s.journal.Revert(s, snapshot)
-	s.validRevisions = s.validRevisions[:idx]
+	// Update current ctx to the snapshot ctx
+	s.currentCtx = s.ctxSnapshots[idx].ctx
+
+	// Remove invalidated snapshots
+	s.ctxSnapshots = s.ctxSnapshots[:idx]
+}
+
+// the StateDB object should be discarded after committed.
+func (s *StateDB) Commit() error {
+	// Write snapshots from newest to oldest.
+	// Each store.Write() applies the state changes to its parent / previous snapshot
+	for i := len(s.ctxSnapshots) - 1; i >= 0; i-- {
+		snapshot := s.ctxSnapshots[i]
+
+		// write() will be nil for the root snapshot that was created on New()
+		// Root ctx won't need write() since it isn't a CacheContext
+		if snapshot.write != nil {
+			snapshot.write()
+		}
+	}
+
+	return nil
 }
 
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
-func (s *StateDB) Commit() error {
+func (s *StateDB) CommitOld() error {
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
 		if obj.suicided {
-			if err := s.keeper.DeleteAccount(s.ctx, obj.Address()); err != nil {
+			if err := s.keeper.DeleteAccount(s.currentCtx, obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
 		} else {
 			if obj.code != nil && obj.dirtyCode {
-				s.keeper.SetCode(s.ctx, obj.CodeHash(), obj.code)
+				s.keeper.SetCode(s.currentCtx, obj.CodeHash(), obj.code)
 			}
-			if err := s.keeper.SetAccount(s.ctx, obj.Address(), obj.account); err != nil {
+			if err := s.keeper.SetAccount(s.currentCtx, obj.Address(), obj.account); err != nil {
 				return errorsmod.Wrap(err, "failed to set account")
 			}
 			for _, key := range obj.dirtyStorage.SortedKeys() {
@@ -472,7 +531,7 @@ func (s *StateDB) Commit() error {
 				if value == obj.originStorage[key] {
 					continue
 				}
-				s.keeper.SetState(s.ctx, obj.Address(), key, value.Bytes())
+				s.keeper.SetState(s.currentCtx, obj.Address(), key, value.Bytes())
 			}
 		}
 	}
