@@ -20,7 +20,8 @@ import (
 	"math/big"
 	"sort"
 
-	errorsmod "cosmossdk.io/errors"
+	"github.com/cosmos/cosmos-sdk/store"
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -28,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/x/evm/types"
 	evm "github.com/evmos/ethermint/x/evm/vm"
+	dbm "github.com/tendermint/tm-db"
 )
 
 // revision is the identifier of a version of state.
@@ -54,22 +56,24 @@ var _ vm.StateDB = &StateDB{}
 type StateDB struct {
 	keeper evm.StateDBKeeper
 
-	// Current currentCtx of the state -- branched on creation and each snapshot
+	// current branched sdk.Context -- branched on creation and each snapshot
 	currentCtx sdk.Context
-
-	// Current currentCtxWrite of the state -- calling will apply the state changes to
-	// the parent ctx
+	// write function of currentCtx
 	currentCtxWrite func()
 
-	ctxSnapshots []ctxSnapshot
+	// Snapshots of Ctx, each a CacheContext branch of the previous one
+	ctxSnapshots   []ctxSnapshot
+	nextSnapshotID int
+
+	logStore *StateDBStore
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
-	journal        *journal
-	validRevisions []revision
-	nextRevisionID int
+	// journal        *journal
+	// validRevisions []revision
+	// nextRevisionID int
 
-	stateObjects map[common.Address]*stateObject
+	// stateObjects map[common.Address]*stateObject
 
 	txConfig types.TxConfig
 
@@ -85,16 +89,27 @@ type StateDB struct {
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm.StateDB {
+	// Create an in-memory DB for accessList which does not need to be committed
+	// to underlying state.
+	//
+	// Why do we use this instead of a simple map?
+	// Because Snapshot() will then also apply to the accessList without needing
+	// to keep a separate snapshot of the accessList.
+	db := dbm.NewMemDB()
+	cms := store.NewCommitMultiStore(db)
+	cms.MountStoreWithDB(storeKey, storetypes.StoreTypeMemory, db)
+
 	statedb := &StateDB{
 		keeper:          keeper,
 		currentCtx:      ctx,
 		currentCtxWrite: nil,
 
-		ctxSnapshots: []ctxSnapshot{},
+		ctxSnapshots:   []ctxSnapshot{},
+		nextSnapshotID: 0,
 
-		stateObjects: make(map[common.Address]*stateObject),
-		journal:      newJournal(),
-		accessList:   newAccessList(),
+		accessList: newAccessList(storeKey),
+
+		logStore: NewStateDBStore(storeKey),
 
 		txConfig: txConfig,
 	}
@@ -113,34 +128,28 @@ func (s *StateDB) Keeper() evm.StateDBKeeper {
 
 // AddLog adds a log, called by evm.
 func (s *StateDB) AddLog(log *ethtypes.Log) {
-	s.journal.append(addLogChange{})
-
 	log.TxHash = s.txConfig.TxHash
 	log.BlockHash = s.txConfig.BlockHash
 	log.TxIndex = s.txConfig.TxIndex
 	log.Index = s.txConfig.LogIndex + uint(len(s.logs))
-	s.logs = append(s.logs, log)
+
+	s.logStore.AddLog(s.currentCtx, log)
 }
 
 // Logs returns the logs of current transaction.
 func (s *StateDB) Logs() []*ethtypes.Log {
-	return s.logs
+	return s.logStore.GetAllLogs(s.currentCtx)
 }
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	s.journal.append(refundChange{prev: s.refund})
-	s.refund += gas
+	s.logStore.AddRefund(s.currentCtx, gas)
 }
 
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
-	s.journal.append(refundChange{prev: s.refund})
-	if gas > s.refund {
-		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
-	}
-	s.refund -= gas
+	s.logStore.SubRefund(s.currentCtx, gas)
 }
 
 // Exist reports whether the given account address exists in the state.
@@ -222,7 +231,7 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
-	return s.refund
+	return s.logStore.GetRefund(s.currentCtx)
 }
 
 // HasSuicided returns if the contract is suicided in current transaction.
@@ -417,44 +426,28 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
-	if s.accessList.AddAddress(addr) {
-		s.journal.append(accessListAddAccountChange{&addr})
-	}
+	_ = s.accessList.AddAddress(s.currentCtx, addr)
 }
 
 // AddSlotToAccessList adds the given (address, slot)-tuple to the access list
 func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
-	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
-	if addrMod {
-		// In practice, this should not happen, since there is no way to enter the
-		// scope of 'address' without having the 'address' become already added
-		// to the access list (via call-variant, create, etc).
-		// Better safe than sorry, though
-		s.journal.append(accessListAddAccountChange{&addr})
-	}
-	if slotMod {
-		s.journal.append(accessListAddSlotChange{
-			address: &addr,
-			slot:    &slot,
-		})
-	}
+	_, _ = s.accessList.AddSlot(s.currentCtx, addr, slot)
 }
 
 // AddressInAccessList returns true if the given address is in the access list.
 func (s *StateDB) AddressInAccessList(addr common.Address) bool {
-	return s.accessList.ContainsAddress(addr)
+	return s.accessList.ContainsAddress(s.currentCtx, addr)
 }
 
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
-	return s.accessList.Contains(addr, slot)
+	return s.accessList.Contains(s.currentCtx, addr, slot)
 }
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	id := s.nextRevisionID
-	s.nextRevisionID++
-	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
+	id := s.nextSnapshotID
+	s.nextSnapshotID++
 
 	// Save the current context (cached multi-store and events) + write function
 	// to apply the snapshot to the parent store
@@ -506,34 +499,5 @@ func (s *StateDB) Commit() error {
 		}
 	}
 
-	return nil
-}
-
-// Commit writes the dirty states to keeper
-// the StateDB object should be discarded after committed.
-func (s *StateDB) CommitOld() error {
-	for _, addr := range s.journal.sortedDirties() {
-		obj := s.stateObjects[addr]
-		if obj.suicided {
-			if err := s.keeper.DeleteAccount(s.currentCtx, obj.Address()); err != nil {
-				return errorsmod.Wrap(err, "failed to delete account")
-			}
-		} else {
-			if obj.code != nil && obj.dirtyCode {
-				s.keeper.SetCode(s.currentCtx, obj.CodeHash(), obj.code)
-			}
-			if err := s.keeper.SetAccount(s.currentCtx, obj.Address(), obj.account); err != nil {
-				return errorsmod.Wrap(err, "failed to set account")
-			}
-			for _, key := range obj.dirtyStorage.SortedKeys() {
-				value := obj.dirtyStorage[key]
-				// Skip noop changes, persist actual changes
-				if value == obj.originStorage[key] {
-					continue
-				}
-				s.keeper.SetState(s.currentCtx, obj.Address(), key, value.Bytes())
-			}
-		}
-	}
 	return nil
 }
