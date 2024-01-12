@@ -24,20 +24,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-var (
-	storeKey = sdk.NewKVStoreKey("evm-statedb-accesslist")
-
-	AddressKey     = []byte{0x01} // common.Address
-	AddressSlotKey = []byte{0x02} // (common.Address, common.Hash)
-)
-
 type accessList struct {
 	key storetypes.StoreKey
 }
 
 // ContainsAddress returns true if the address is in the access list.
 func (al *accessList) ContainsAddress(ctx sdk.Context, address common.Address) bool {
-	store := prefix.NewStore(ctx.KVStore(al.key), AddressKey)
+	store := prefix.NewStore(ctx.KVStore(al.key), AccessListAddressKey)
 	return store.Has(address.Bytes())
 }
 
@@ -54,7 +47,7 @@ func (al *accessList) Contains(
 		return false, false
 	}
 
-	store := prefix.NewStore(ctx.KVStore(al.key), AddressSlotKey)
+	store := prefix.NewStore(ctx.KVStore(al.key), AccessListAddressSlotKey)
 	slotPresent = store.Has(append(address.Bytes(), slot.Bytes()...))
 
 	return true, slotPresent
@@ -70,7 +63,7 @@ func newAccessList(storeKey storetypes.StoreKey) *accessList {
 // AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
 func (al *accessList) AddAddress(ctx sdk.Context, address common.Address) bool {
-	store := prefix.NewStore(ctx.KVStore(al.key), AddressKey)
+	store := prefix.NewStore(ctx.KVStore(al.key), AccessListAddressKey)
 	if store.Has(address.Bytes()) {
 		return false
 	}
@@ -93,7 +86,7 @@ func (al *accessList) AddSlot(
 	addrChange = al.AddAddress(ctx, address)
 
 	// Add slot if not present
-	store := prefix.NewStore(ctx.KVStore(al.key), AddressSlotKey)
+	store := prefix.NewStore(ctx.KVStore(al.key), AccessListAddressSlotKey)
 	if store.Has(append(address.Bytes(), slot.Bytes()...)) {
 		// Already contains the slot
 		return addrChange, false

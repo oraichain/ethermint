@@ -12,6 +12,8 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
+
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 func NewTestContext() sdk.Context {
@@ -100,4 +102,122 @@ func BenchmarkRevertToSnapshot8(b *testing.B) {
 
 func BenchmarkRevertToSnapshot16(b *testing.B) {
 	benchmarkRevertToSnapshot(b, 16)
+}
+
+func BenchmarkAddBalance(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.AddBalance(address, big.NewInt(1))
+	}
+}
+
+func BenchmarkSubBalance(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.SubBalance(address, big.NewInt(1))
+	}
+}
+
+func BenchmarkGetBalance(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.GetBalance(address)
+	}
+}
+
+func BenchmarkGetNonce(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.GetNonce(address)
+	}
+}
+
+func BenchmarkSetNonce(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.SetNonce(address, 1)
+	}
+}
+
+func BenchmarkGetCodeHash(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.GetCodeHash(address)
+	}
+}
+
+func BenchmarkGetCode(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.GetCode(address)
+	}
+}
+
+func BenchmarkAddLog(b *testing.B) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	log := &ethtypes.Log{
+		Address: address,
+		Topics:  []common.Hash{common.BigToHash(big.NewInt(1))},
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.AddLog(log)
+	}
+}
+
+func benchmarkGetLogs(b *testing.B, logEntries int) {
+	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+
+	for i := 0; i < logEntries; i++ {
+		log := &ethtypes.Log{
+			Address: address,
+			Topics:  []common.Hash{common.BigToHash(big.NewInt(int64(i)))},
+		}
+		db.AddLog(log)
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		db.Logs()
+	}
+}
+
+func BenchmarkGetLogs1(b *testing.B) {
+	benchmarkGetLogs(b, 1)
+}
+
+func BenchmarkGetLogs8(b *testing.B) {
+	benchmarkGetLogs(b, 8)
+}
+
+func BenchmarkGetLogs64(b *testing.B) {
+	benchmarkGetLogs(b, 64)
+}
+
+func BenchmarkGetLogs512(b *testing.B) {
+	benchmarkGetLogs(b, 512)
 }
