@@ -24,19 +24,19 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-type accessList struct {
+type sdkAccessList struct {
 	key storetypes.StoreKey
 }
 
 // ContainsAddress returns true if the address is in the access list.
-func (al *accessList) ContainsAddress(ctx sdk.Context, address common.Address) bool {
+func (al *sdkAccessList) ContainsAddress(ctx sdk.Context, address common.Address) bool {
 	store := prefix.NewStore(ctx.KVStore(al.key), AccessListAddressKey)
 	return store.Has(address.Bytes())
 }
 
 // Contains checks if a slot within an account is present in the access list, returning
 // separate flags for the presence of the account and the slot respectively.
-func (al *accessList) Contains(
+func (al *sdkAccessList) Contains(
 	ctx sdk.Context,
 	address common.Address,
 	slot common.Hash,
@@ -53,16 +53,16 @@ func (al *accessList) Contains(
 	return true, slotPresent
 }
 
-// newAccessList creates a new accessList.
-func newAccessList(storeKey storetypes.StoreKey) *accessList {
-	return &accessList{
+// newSdkAccessList creates a new accessList.
+func newSdkAccessList(storeKey storetypes.StoreKey) *sdkAccessList {
+	return &sdkAccessList{
 		key: storeKey,
 	}
 }
 
 // AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
-func (al *accessList) AddAddress(ctx sdk.Context, address common.Address) bool {
+func (al *sdkAccessList) AddAddress(ctx sdk.Context, address common.Address) bool {
 	store := prefix.NewStore(ctx.KVStore(al.key), AccessListAddressKey)
 	if store.Has(address.Bytes()) {
 		return false
@@ -77,7 +77,7 @@ func (al *accessList) AddAddress(ctx sdk.Context, address common.Address) bool {
 // - address added
 // - slot added
 // For any 'true' value returned, a corresponding journal entry must be made.
-func (al *accessList) AddSlot(
+func (al *sdkAccessList) AddSlot(
 	ctx sdk.Context,
 	address common.Address,
 	slot common.Hash,

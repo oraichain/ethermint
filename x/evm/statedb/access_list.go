@@ -20,20 +20,20 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-type accessListOld struct {
+type accessList struct {
 	addresses map[common.Address]int
 	slots     []map[common.Hash]struct{}
 }
 
 // ContainsAddress returns true if the address is in the access list.
-func (al *accessListOld) ContainsAddress(address common.Address) bool {
+func (al *accessList) ContainsAddress(address common.Address) bool {
 	_, ok := al.addresses[address]
 	return ok
 }
 
 // Contains checks if a slot within an account is present in the access list, returning
 // separate flags for the presence of the account and the slot respectively.
-func (al *accessListOld) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
+func (al *accessList) Contains(address common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
 	idx, ok := al.addresses[address]
 	if !ok {
 		// no such address (and hence zero slots)
@@ -48,15 +48,15 @@ func (al *accessListOld) Contains(address common.Address, slot common.Hash) (add
 }
 
 // newaccessListOld creates a new accessListOld.
-func newaccessListOld() *accessListOld {
-	return &accessListOld{
+func newAccessList() *accessList {
+	return &accessList{
 		addresses: make(map[common.Address]int),
 	}
 }
 
 // AddAddress adds an address to the access list, and returns 'true' if the operation
 // caused a change (addr was not previously in the list).
-func (al *accessListOld) AddAddress(address common.Address) bool {
+func (al *accessList) AddAddress(address common.Address) bool {
 	if _, present := al.addresses[address]; present {
 		return false
 	}
@@ -69,7 +69,7 @@ func (al *accessListOld) AddAddress(address common.Address) bool {
 // - address added
 // - slot added
 // For any 'true' value returned, a corresponding journal entry must be made.
-func (al *accessListOld) AddSlot(address common.Address, slot common.Hash) (addrChange bool, slotChange bool) {
+func (al *accessList) AddSlot(address common.Address, slot common.Hash) (addrChange bool, slotChange bool) {
 	idx, addrPresent := al.addresses[address]
 	if !addrPresent || idx == -1 {
 		// Address not present, or addr present but no slots there
@@ -93,7 +93,7 @@ func (al *accessListOld) AddSlot(address common.Address, slot common.Hash) (addr
 // This operation needs to be performed in the same order as the addition happened.
 // This method is meant to be used  by the journal, which maintains ordering of
 // operations.
-func (al *accessListOld) DeleteSlot(address common.Address, slot common.Hash) {
+func (al *accessList) DeleteSlot(address common.Address, slot common.Hash) {
 	idx, addrOk := al.addresses[address]
 	if !addrOk {
 		panic("reverting slot change, address not present in list")
@@ -113,6 +113,6 @@ func (al *accessListOld) DeleteSlot(address common.Address, slot common.Hash) {
 // needs to be performed in the same order as the addition happened.
 // This method is meant to be used  by the journal, which maintains ordering of
 // operations.
-func (al *accessListOld) DeleteAddress(address common.Address) {
+func (al *accessList) DeleteAddress(address common.Address) {
 	delete(al.addresses, address)
 }
