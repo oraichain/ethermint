@@ -16,6 +16,7 @@
 package statedb
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"sort"
@@ -69,7 +70,7 @@ type StateDB struct {
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
-	// journal        *journal
+	journal *journal
 	// validRevisions []revision
 	// nextRevisionID int
 
@@ -107,9 +108,9 @@ func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm
 		ctxSnapshots:   []ctxSnapshot{},
 		nextSnapshotID: 0,
 
-		accessList: newAccessList(storeKey),
-
-		logStore: NewStateDBStore(storeKey),
+		journal:    newJournal(),
+		accessList: newAccessList(),
+		logStore:   NewStateDBStore(storeKey),
 
 		txConfig: txConfig,
 	}
@@ -155,30 +156,36 @@ func (s *StateDB) SubRefund(gas uint64) {
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
 func (s *StateDB) Exist(addr common.Address) bool {
-	return s.getStateObject(addr) != nil
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+	return account != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (s *StateDB) Empty(addr common.Address) bool {
-	so := s.getStateObject(addr)
-	return so == nil || so.empty()
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+	if account == nil {
+		return true
+	}
+
+	return account.Balance.Sign() == 0 && account.Nonce == 0 && bytes.Equal(account.CodeHash, emptyCodeHash)
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Balance()
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+	if account != nil {
+		return account.Balance
 	}
+
 	return common.Big0
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Nonce()
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+	if account != nil {
+		return account.Nonce
 	}
 
 	return 0
@@ -186,47 +193,49 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 
 // GetCode returns the code of account, nil if not exists.
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.Code()
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+	if account == nil {
+		return nil
 	}
-	return nil
+
+	if bytes.Equal(account.CodeHash, emptyCodeHash) {
+		return nil
+	}
+
+	return s.keeper.GetCode(s.currentCtx, common.BytesToHash(account.CodeHash))
 }
 
 // GetCodeSize returns the code size of account.
 func (s *StateDB) GetCodeSize(addr common.Address) int {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.CodeSize()
-	}
-	return 0
+	code := s.GetCode(addr)
+	return len(code)
 }
 
 // GetCodeHash returns the code hash of account.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject == nil {
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+	if account == nil {
 		return common.Hash{}
 	}
-	return common.BytesToHash(stateObject.CodeHash())
+
+	return common.BytesToHash(account.CodeHash)
 }
 
 // GetState retrieves a value from the given account's storage trie.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.GetState(hash)
+	account := s.getOrNewAccount(addr)
+	if account == nil {
+		return common.Hash{}
 	}
-	return common.Hash{}
+
+	return s.keeper.GetState(s.currentCtx, addr, hash)
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
-	stateObject := s.getStateObject(addr)
-	if stateObject != nil {
-		return stateObject.GetCommittedState(hash)
-	}
-	return common.Hash{}
+	// TODO: Double check or find a cleaner way
+	// This gets the state from the parent ctx which is the state before Commit()
+	return s.keeper.GetState(s.ctxSnapshots[0].ctx, addr, hash)
 }
 
 // GetRefund returns the current value of the refund counter.
@@ -236,6 +245,9 @@ func (s *StateDB) GetRefund() uint64 {
 
 // HasSuicided returns if the contract is suicided in current transaction.
 func (s *StateDB) HasSuicided(addr common.Address) bool {
+	// Could be created and then suicided in the same transaction, so we can't
+	// rely on the existence of the account before the current transaction.
+
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.suicided
@@ -249,49 +261,14 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 // to the database.
 func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {} //nolint: revive
 
-// getStateObject retrieves a state object given by the address, returning nil if
-// the object is not found.
-func (s *StateDB) getStateObject(addr common.Address) *stateObject {
-	// Prefer live objects if any is available
-	if obj := s.stateObjects[addr]; obj != nil {
-		return obj
-	}
-	// If no live objects are available, load it from keeper
+// getOrNewAccount retrieves a state account or create a new account if nil.
+func (s *StateDB) getOrNewAccount(addr common.Address) *types.StateDBAccount {
 	account := s.keeper.GetAccount(s.currentCtx, addr)
 	if account == nil {
-		return nil
+		account = &types.StateDBAccount{}
 	}
-	// Insert into the live set
-	obj := newObject(s, addr, *account)
-	s.setStateObject(obj)
-	return obj
-}
 
-// getOrNewStateObject retrieves a state object or create a new state object if nil.
-func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
-	stateObject := s.getStateObject(addr)
-	if stateObject == nil {
-		stateObject, _ = s.createObject(addr)
-	}
-	return stateObject
-}
-
-// createObject creates a new state object. If there is an existing account with
-// the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
-	prev = s.getStateObject(addr)
-
-	newobj = newObject(s, addr, types.StateDBAccount{})
-	if prev == nil {
-		s.journal.append(createObjectChange{account: &addr})
-	} else {
-		s.journal.append(resetObjectChange{prev: prev})
-	}
-	s.setStateObject(newobj)
-	if prev != nil {
-		return newobj, prev
-	}
-	return newobj, nil
+	return account
 }
 
 // CreateAccount explicitly creates a state object. If a state object with the address
@@ -305,32 +282,19 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
-	newObj, prev := s.createObject(addr)
-	if prev != nil {
-		newObj.setBalance(prev.account.Balance)
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+
+	if account != nil {
+		// Only carry over balance, other values are zero'd out ?
+		account.Balance = account.Balance
+		s.keeper.SetAccount(s.currentCtx, addr, *account)
 	}
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
 func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
-	so := s.getStateObject(addr)
-	if so == nil {
-		return nil
-	}
-	s.keeper.ForEachStorage(s.currentCtx, addr, func(key, value common.Hash) bool {
-		if value, dirty := so.dirtyStorage[key]; dirty {
-			return cb(key, value)
-		}
-		if len(value) > 0 {
-			return cb(key, value)
-		}
-		return true
-	})
+	s.keeper.ForEachStorage(s.currentCtx, addr, cb)
 	return nil
-}
-
-func (s *StateDB) setStateObject(object *stateObject) {
-	s.stateObjects[object.Address()] = object
 }
 
 /*
@@ -339,42 +303,44 @@ func (s *StateDB) setStateObject(object *stateObject) {
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.AddBalance(amount)
+	if amount.Sign() == 0 {
+		return
 	}
+
+	account := s.getOrNewAccount(addr)
+
+	account.Balance = new(big.Int).Add(account.Balance, amount)
+	s.keeper.SetAccount(s.currentCtx, addr, *account)
 }
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SubBalance(amount)
+	if amount.Sign() == 0 {
+		return
 	}
+
+	account := s.getOrNewAccount(addr)
+
+	account.Balance = new(big.Int).Sub(account.Balance, amount)
+	s.keeper.SetAccount(s.currentCtx, addr, *account)
 }
 
 // SetNonce sets the nonce of account.
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetNonce(nonce)
-	}
+	account := s.getOrNewAccount(addr)
+
+	account.Nonce = nonce
+	s.keeper.SetAccount(s.currentCtx, addr, *account)
 }
 
 // SetCode sets the code of account.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetCode(crypto.Keccak256Hash(code), code)
-	}
+	s.keeper.SetCode(s.currentCtx, crypto.Keccak256Hash(code).Bytes(), code)
 }
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	stateObject := s.getOrNewStateObject(addr)
-	if stateObject != nil {
-		stateObject.SetState(key, value)
-	}
+	s.keeper.SetState(s.currentCtx, addr, key, value.Bytes())
 }
 
 // Suicide marks the given account as suicided.
@@ -383,17 +349,15 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
 func (s *StateDB) Suicide(addr common.Address) bool {
-	stateObject := s.getStateObject(addr)
-	if stateObject == nil {
+	account := s.keeper.GetAccount(s.currentCtx, addr)
+
+	if account == nil {
 		return false
 	}
-	s.journal.append(suicideChange{
-		account:     &addr,
-		prev:        stateObject.suicided,
-		prevbalance: new(big.Int).Set(stateObject.Balance()),
-	})
-	stateObject.markSuicided()
-	stateObject.account.Balance = new(big.Int)
+
+	if err := s.keeper.DeleteAccount(s.currentCtx, addr); err != nil {
+		panic(fmt.Errorf("failed to delete account in Suicide(): %w", err))
+	}
 
 	return true
 }
@@ -426,22 +390,37 @@ func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, 
 
 // AddAddressToAccessList adds the given address to the access list
 func (s *StateDB) AddAddressToAccessList(addr common.Address) {
-	_ = s.accessList.AddAddress(s.currentCtx, addr)
+	if s.accessList.AddAddress(addr) {
+		s.journal.append(accessListAddAccountChange{&addr})
+	}
 }
 
 // AddSlotToAccessList adds the given (address, slot)-tuple to the access list
 func (s *StateDB) AddSlotToAccessList(addr common.Address, slot common.Hash) {
-	_, _ = s.accessList.AddSlot(s.currentCtx, addr, slot)
+	addrMod, slotMod := s.accessList.AddSlot(addr, slot)
+	if addrMod {
+		// In practice, this should not happen, since there is no way to enter the
+		// scope of 'address' without having the 'address' become already added
+		// to the access list (via call-variant, create, etc).
+		// Better safe than sorry, though
+		s.journal.append(accessListAddAccountChange{&addr})
+	}
+	if slotMod {
+		s.journal.append(accessListAddSlotChange{
+			address: &addr,
+			slot:    &slot,
+		})
+	}
 }
 
 // AddressInAccessList returns true if the given address is in the access list.
 func (s *StateDB) AddressInAccessList(addr common.Address) bool {
-	return s.accessList.ContainsAddress(s.currentCtx, addr)
+	return s.accessList.ContainsAddress(addr)
 }
 
 // SlotInAccessList returns true if the given (address, slot)-tuple is in the access list.
 func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addressPresent bool, slotPresent bool) {
-	return s.accessList.Contains(s.currentCtx, addr, slot)
+	return s.accessList.Contains(addr, slot)
 }
 
 // Snapshot returns an identifier for the current revision of the state.
