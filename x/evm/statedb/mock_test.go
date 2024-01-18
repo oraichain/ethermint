@@ -26,19 +26,19 @@ type MockAcount struct {
 }
 
 type MockKeeper struct {
-	accounts map[common.Address]MockAcount
-	codes    map[common.Hash][]byte
+	Accounts map[common.Address]MockAcount
+	Codes    map[common.Hash][]byte
 }
 
 func NewMockKeeper() *MockKeeper {
 	return &MockKeeper{
-		accounts: make(map[common.Address]MockAcount),
-		codes:    make(map[common.Hash][]byte),
+		Accounts: make(map[common.Address]MockAcount),
+		Codes:    make(map[common.Hash][]byte),
 	}
 }
 
 func (k MockKeeper) GetAccount(ctx sdk.Context, addr common.Address) *types.StateDBAccount {
-	acct, ok := k.accounts[addr]
+	acct, ok := k.Accounts[addr]
 	if !ok {
 		return nil
 	}
@@ -46,15 +46,15 @@ func (k MockKeeper) GetAccount(ctx sdk.Context, addr common.Address) *types.Stat
 }
 
 func (k MockKeeper) GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash {
-	return k.accounts[addr].states[key]
+	return k.Accounts[addr].states[key]
 }
 
 func (k MockKeeper) GetCode(ctx sdk.Context, codeHash common.Hash) []byte {
-	return k.codes[codeHash]
+	return k.Codes[codeHash]
 }
 
 func (k MockKeeper) ForEachStorage(ctx sdk.Context, addr common.Address, cb func(key, value common.Hash) bool) {
-	if acct, ok := k.accounts[addr]; ok {
+	if acct, ok := k.Accounts[addr]; ok {
 		for k, v := range acct.states {
 			if !cb(k, v) {
 				return
@@ -67,19 +67,19 @@ func (k MockKeeper) SetAccount(ctx sdk.Context, addr common.Address, account typ
 	if addr == errAddress {
 		return errors.New("mock db error")
 	}
-	acct, exists := k.accounts[addr]
+	acct, exists := k.Accounts[addr]
 	if exists {
 		// update
 		acct.account = account
-		k.accounts[addr] = acct
+		k.Accounts[addr] = acct
 	} else {
-		k.accounts[addr] = MockAcount{account: account, states: make(statedb.Storage)}
+		k.Accounts[addr] = MockAcount{account: account, states: make(statedb.Storage)}
 	}
 	return nil
 }
 
 func (k MockKeeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
-	if acct, ok := k.accounts[addr]; ok {
+	if acct, ok := k.Accounts[addr]; ok {
 		if len(value) == 0 {
 			delete(acct.states, key)
 		} else {
@@ -89,19 +89,19 @@ func (k MockKeeper) SetState(ctx sdk.Context, addr common.Address, key common.Ha
 }
 
 func (k MockKeeper) SetCode(ctx sdk.Context, codeHash []byte, code []byte) {
-	k.codes[common.BytesToHash(codeHash)] = code
+	k.Codes[common.BytesToHash(codeHash)] = code
 }
 
 func (k MockKeeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error {
 	if addr == errAddress {
 		return errors.New("mock db error")
 	}
-	acct, ok := k.accounts[addr]
+	acct, ok := k.Accounts[addr]
 	if !ok {
 		return errors.New("account not found")
 	}
 	acct.account.Balance = amount
-	k.accounts[addr] = acct
+	k.Accounts[addr] = acct
 	return nil
 }
 
@@ -109,21 +109,21 @@ func (k MockKeeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
 	if addr == errAddress {
 		return errors.New("mock db error")
 	}
-	old := k.accounts[addr]
-	delete(k.accounts, addr)
+	old := k.Accounts[addr]
+	delete(k.Accounts, addr)
 	if !bytes.Equal(old.account.CodeHash, emptyCodeHash) {
-		delete(k.codes, common.BytesToHash(old.account.CodeHash))
+		delete(k.Codes, common.BytesToHash(old.account.CodeHash))
 	}
 	return nil
 }
 
 func (k MockKeeper) Clone() *MockKeeper {
-	accounts := make(map[common.Address]MockAcount, len(k.accounts))
-	for k, v := range k.accounts {
+	accounts := make(map[common.Address]MockAcount, len(k.Accounts))
+	for k, v := range k.Accounts {
 		accounts[k] = v
 	}
-	codes := make(map[common.Hash][]byte, len(k.codes))
-	for k, v := range k.codes {
+	codes := make(map[common.Hash][]byte, len(k.Codes))
+	for k, v := range k.Codes {
 		codes[k] = v
 	}
 	return &MockKeeper{accounts, codes}

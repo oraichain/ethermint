@@ -48,7 +48,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			suite.Require().NoError(db.Commit())
 
 			keeper := db.Keeper().(*MockKeeper)
-			acct := keeper.accounts[address]
+			acct := keeper.Accounts[address]
 			suite.Require().Equal(types.NewEmptyAccount(), &acct.account)
 			suite.Require().Empty(acct.states)
 			suite.Require().False(acct.account.IsContract())
@@ -95,8 +95,8 @@ func (suite *StateDBTestSuite) TestAccount() {
 
 			// and cleared in keeper too
 			keeper := db.Keeper().(*MockKeeper)
-			suite.Require().Empty(keeper.accounts)
-			suite.Require().Empty(keeper.codes)
+			suite.Require().Empty(keeper.Accounts)
+			suite.Require().Empty(keeper.Codes)
 		}},
 	}
 	for _, tc := range testCases {
@@ -181,7 +181,7 @@ func (suite *StateDBTestSuite) TestBalance() {
 			suite.Require().Equal(tc.expBalance, db.GetBalance(address))
 			suite.Require().NoError(db.Commit())
 			// check committed balance too
-			suite.Require().Equal(tc.expBalance, keeper.accounts[address].account.Balance)
+			suite.Require().Equal(tc.expBalance, keeper.Accounts[address].account.Balance)
 		})
 	}
 }
@@ -231,7 +231,7 @@ func (suite *StateDBTestSuite) TestState() {
 			suite.Require().NoError(db.Commit())
 
 			// check committed states in keeper
-			suite.Require().Equal(tc.expStates, keeper.accounts[address].states)
+			suite.Require().Equal(tc.expStates, keeper.Accounts[address].states)
 
 			// check ForEachStorage
 			db = statedb.New(NewTestContext(), keeper, emptyTxConfig)
@@ -554,7 +554,7 @@ func (suite *StateDBTestSuite) TestIterateStorage() {
 
 	storage := CollectContractStorage(db)
 	suite.Require().Equal(2, len(storage))
-	suite.Require().Equal(keeper.accounts[address].states, storage)
+	suite.Require().Equal(keeper.Accounts[address].states, storage)
 
 	// break early iteration
 	storage = make(statedb.Storage)
