@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/big"
 
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -91,6 +92,19 @@ func (k MockKeeper) SetCode(ctx sdk.Context, codeHash []byte, code []byte) {
 	k.codes[common.BytesToHash(codeHash)] = code
 }
 
+func (k MockKeeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error {
+	if addr == errAddress {
+		return errors.New("mock db error")
+	}
+	acct, ok := k.accounts[addr]
+	if !ok {
+		return errors.New("account not found")
+	}
+	acct.account.Balance = amount
+	k.accounts[addr] = acct
+	return nil
+}
+
 func (k MockKeeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
 	if addr == errAddress {
 		return errors.New("mock db error")
@@ -113,4 +127,8 @@ func (k MockKeeper) Clone() *MockKeeper {
 		codes[k] = v
 	}
 	return &MockKeeper{accounts, codes}
+}
+
+func (k MockKeeper) GetTransientKey() storetypes.StoreKey {
+	return testKvStoreKey
 }

@@ -13,6 +13,7 @@ type SnapshotCommitCtx struct {
 	initialCtx sdk.Context
 	snapshots  []ctxSnapshot
 
+	// always incrementing snapshot ID, used to identify snapshots.
 	nextSnapshotID int
 }
 
@@ -41,6 +42,8 @@ func (c *SnapshotCommitCtx) CurrentCtx() sdk.Context {
 	return c.snapshots[len(c.snapshots)-1].ctx
 }
 
+// CurrentSnapshot returns the current snapshot and true if there is one, or
+// false if there are no snapshots.
 func (c *SnapshotCommitCtx) CurrentSnapshot() (ctxSnapshot, bool) {
 	if len(c.snapshots) == 0 {
 		return ctxSnapshot{}, false

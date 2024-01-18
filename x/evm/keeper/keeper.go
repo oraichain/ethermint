@@ -391,3 +391,7 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	k.SetTransientGasUsed(ctx, result)
 	return result, nil
 }
+
+func (k Keeper) GetTransientKey() storetypes.StoreKey {
+	return k.transientKey
+}
