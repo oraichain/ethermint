@@ -18,7 +18,6 @@ package statedb
 
 import (
 	"bytes"
-	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -102,27 +101,9 @@ type (
 		prev *stateObject
 	}
 	suicideChange struct {
-		account     *common.Address
-		prev        bool // whether account had already suicided
-		prevbalance *big.Int
-	}
-
-	// Changes to individual accounts.
-	balanceChange struct {
 		account *common.Address
-		prev    *big.Int
-	}
-	nonceChange struct {
-		account *common.Address
-		prev    uint64
-	}
-	storageChange struct {
-		account       *common.Address
-		key, prevalue common.Hash
-	}
-	codeChange struct {
-		account            *common.Address
-		prevcode, prevhash []byte
+		prev    bool // whether account had already suicided
+		// prevBalance not needed, in cache ctx
 	}
 
 	// Changes to other state values.
@@ -140,66 +121,6 @@ type (
 		slot    *common.Hash
 	}
 )
-
-func (ch createObjectChange) Revert(s *StateDB) {
-	delete(s.stateObjects, *ch.account)
-}
-
-func (ch createObjectChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch resetObjectChange) Revert(s *StateDB) {
-	s.setStateObject(ch.prev)
-}
-
-func (ch resetObjectChange) Dirtied() *common.Address {
-	return nil
-}
-
-func (ch suicideChange) Revert(s *StateDB) {
-	obj := s.getStateObject(*ch.account)
-	if obj != nil {
-		obj.suicided = ch.prev
-		obj.setBalance(ch.prevbalance)
-	}
-}
-
-func (ch suicideChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch balanceChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setBalance(ch.prev)
-}
-
-func (ch balanceChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch nonceChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setNonce(ch.prev)
-}
-
-func (ch nonceChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch codeChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
-}
-
-func (ch codeChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch storageChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
-}
-
-func (ch storageChange) Dirtied() *common.Address {
-	return ch.account
-}
 
 func (ch refundChange) Revert(s *StateDB) {
 	s.refund = ch.prev
@@ -239,5 +160,13 @@ func (ch accessListAddSlotChange) Revert(s *StateDB) {
 }
 
 func (ch accessListAddSlotChange) Dirtied() *common.Address {
+	return nil
+}
+
+func (ch suicideChange) Revert(s *StateDB) {
+	s.suicidedAddresses[*ch.account] = ch.prev
+}
+
+func (ch suicideChange) Dirtied() *common.Address {
 	return nil
 }
