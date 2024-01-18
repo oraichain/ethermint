@@ -16,13 +16,15 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
-func NewTestContext() sdk.Context {
-	storeKey := storetypes.NewKVStoreKey("test")
+var (
+	testKvStoreKey = sdk.NewKVStoreKey("test")
+)
 
+func NewTestContext() sdk.Context {
 	db := dbm.NewMemDB()
 	cms := store.NewCommitMultiStore(db)
 
-	cms.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, db)
+	cms.MountStoreWithDB(testKvStoreKey, storetypes.StoreTypeIAVL, db)
 	if err := cms.LoadLatestVersion(); err != nil {
 		panic(err)
 	}
