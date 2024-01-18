@@ -4,18 +4,17 @@ import (
 	"github.com/cosmos/cosmos-sdk/store/prefix"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 var (
-	storeKey = sdk.NewKVStoreKey("evm-statedb")
-
 	AccessListAddressKey     = []byte{0x01} // common.Address
 	AccessListAddressSlotKey = []byte{0x02} // (common.Address, common.Hash)
 
-	LogKey = []byte{0x03}
-
-	RefundKey = []byte{0x04}
+	LogKey      = []byte{0x03}
+	RefundKey   = []byte{0x04}
+	SuicidedKey = []byte{0x05}
 )
 
 type StateDBStore struct {
@@ -96,4 +95,30 @@ func (ls *StateDBStore) GetRefund(ctx sdk.Context) uint64 {
 		return 0
 	}
 	return sdk.BigEndianToUint64(bz)
+}
+
+func (ls *StateDBStore) SetAccountSuicided(ctx sdk.Context, addr common.Address) {
+	store := prefix.NewStore(ctx.KVStore(ls.key), SuicidedKey)
+	store.Set(addr.Bytes(), []byte{1})
+}
+
+func (ls *StateDBStore) GetAccountSuicided(ctx sdk.Context, addr common.Address) bool {
+	store := prefix.NewStore(ctx.KVStore(ls.key), SuicidedKey)
+	return store.Has(addr.Bytes())
+}
+
+func (ls *StateDBStore) GetAllSuicided(ctx sdk.Context) []common.Address {
+	store := prefix.NewStore(ctx.KVStore(ls.key), SuicidedKey)
+
+	addrs := make([]common.Address, 0)
+
+	iter := sdk.KVStorePrefixIterator(store, []byte{})
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		addr := common.BytesToAddress(iter.Key())
+		addrs = append(addrs, addr)
+	}
+
+	return addrs
 }

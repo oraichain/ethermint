@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/cosmos/cosmos-sdk/store"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -29,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/x/evm/types"
 	evm "github.com/evmos/ethermint/x/evm/vm"
-	dbm "github.com/tendermint/tm-db"
 )
 
 // revision is the identifier of a version of state.
@@ -52,7 +49,7 @@ type StateDB struct {
 
 	ctx *SnapshotCommitCtx
 
-	logStore *StateDBStore
+	ephemeralStore *StateDBStore
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -72,33 +69,19 @@ type StateDB struct {
 
 	// Per-transaction access list
 	accessList *accessList
-
-	// Suicided accounts - true if suicided in current transaction.
-	suicidedAddresses map[common.Address]bool
 }
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm.StateDB {
-	// Create an in-memory DB for accessList which does not need to be committed
-	// to underlying state.
-	//
-	// Why do we use this instead of a simple map?
-	// Because Snapshot() will then also apply to the accessList without needing
-	// to keep a separate snapshot of the accessList.
-	db := dbm.NewMemDB()
-	cms := store.NewCommitMultiStore(db)
-	cms.MountStoreWithDB(storeKey, storetypes.StoreTypeMemory, db)
-
 	statedb := &StateDB{
 		keeper: keeper,
 		// This internally creates a branched ctx so Commit() is still required
 		// to write state to the ctx here.
 		ctx: NewSnapshotCtx(ctx),
 
-		journal:           newJournal(),
-		accessList:        newAccessList(),
-		logStore:          NewStateDBStore(storeKey),
-		suicidedAddresses: make(map[common.Address]bool),
+		journal:        newJournal(),
+		accessList:     newAccessList(),
+		ephemeralStore: NewStateDBStore(keeper.GetTransientKey()),
 
 		txConfig: txConfig,
 	}
@@ -118,23 +101,23 @@ func (s *StateDB) AddLog(log *ethtypes.Log) {
 	log.TxIndex = s.txConfig.TxIndex
 	log.Index = s.txConfig.LogIndex + uint(len(s.logs))
 
-	s.logStore.AddLog(s.ctx.CurrentCtx(), log)
+	s.ephemeralStore.AddLog(s.ctx.CurrentCtx(), log)
 }
 
 // Logs returns the logs of current transaction.
 func (s *StateDB) Logs() []*ethtypes.Log {
-	return s.logStore.GetAllLogs(s.ctx.CurrentCtx())
+	return s.ephemeralStore.GetAllLogs(s.ctx.CurrentCtx())
 }
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	s.logStore.AddRefund(s.ctx.CurrentCtx(), gas)
+	s.ephemeralStore.AddRefund(s.ctx.CurrentCtx(), gas)
 }
 
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
-	s.logStore.SubRefund(s.ctx.CurrentCtx(), gas)
+	s.ephemeralStore.SubRefund(s.ctx.CurrentCtx(), gas)
 }
 
 // Exist reports whether the given account address exists in the state.
@@ -223,19 +206,12 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
-	return s.logStore.GetRefund(s.ctx.CurrentCtx())
+	return s.ephemeralStore.GetRefund(s.ctx.CurrentCtx())
 }
 
 // HasSuicided returns if the contract is suicided in current transaction.
 func (s *StateDB) HasSuicided(addr common.Address) bool {
-	// Could be created and then suicided in the same transaction, so we can't
-	// rely on the existence of the account before the current transaction.
-	suicidedAccount, found := s.suicidedAddresses[addr]
-	if !found {
-		return false
-	}
-
-	return suicidedAccount
+	return s.ephemeralStore.GetAccountSuicided(s.ctx.CurrentCtx(), addr)
 }
 
 // AddPreimage records a SHA3 preimage seen by the VM.
@@ -248,7 +224,9 @@ func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {} //nolint: re
 func (s *StateDB) getOrNewAccount(addr common.Address) *types.StateDBAccount {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
-		account = &types.StateDBAccount{}
+		account = &types.StateDBAccount{
+			Balance: new(big.Int),
+		}
 	}
 
 	return account
@@ -326,7 +304,11 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 
 // SetCode sets the code of account.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	s.keeper.SetCode(s.ctx.CurrentCtx(), crypto.Keccak256Hash(code).Bytes(), code)
+	account := s.getOrNewAccount(addr)
+	account.CodeHash = crypto.Keccak256Hash(code).Bytes()
+	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account)
+
+	s.keeper.SetCode(s.ctx.CurrentCtx(), account.CodeHash, code)
 }
 
 // SetState sets the contract state.
@@ -341,19 +323,16 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 // getStateObject will return a non-nil account after Suicide.
 func (s *StateDB) Suicide(addr common.Address) bool {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-
 	if account == nil {
 		return false
 	}
 
-	// We add to journal, but KEEP the account in the ctx.CurrentCtx() as it should
-	// still be accessible in state until it's committed.
-	s.journal.append(suicideChange{
-		account: &addr,
-		prev:    s.suicidedAddresses[addr],
-	})
+	// Balance cleared, but code and state should still be available until Commit()
+	if err := s.keeper.SetBalance(s.ctx.CurrentCtx(), addr, common.Big0); err != nil {
+		panic(fmt.Errorf("failed to delete suicided account: %w", err))
+	}
 
-	s.suicidedAddresses[addr] = true
+	s.ephemeralStore.SetAccountSuicided(s.ctx.CurrentCtx(), addr)
 
 	return true
 }
@@ -442,12 +421,8 @@ func (s *StateDB) Commit() error {
 	s.ctx.Commit()
 
 	// Commit suicided accounts
-	for addr, isSuicided := range s.suicidedAddresses {
-		// Might be false if a snapshot was reverted
-		if !isSuicided {
-			continue
-		}
-
+	suicidedAddrs := s.ephemeralStore.GetAllSuicided(s.ctx.CurrentCtx())
+	for _, addr := range suicidedAddrs {
 		// Balance is also cleared as part of Keeper.DeleteAccount
 		if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), addr); err != nil {
 			panic(fmt.Errorf("failed to delete suicided account: %w", err))

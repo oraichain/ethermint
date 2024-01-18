@@ -100,11 +100,6 @@ type (
 	resetObjectChange struct {
 		prev *stateObject
 	}
-	suicideChange struct {
-		account *common.Address
-		prev    bool // whether account had already suicided
-		// prevBalance not needed, in cache ctx
-	}
 
 	// Changes to other state values.
 	refundChange struct {
@@ -160,13 +155,5 @@ func (ch accessListAddSlotChange) Revert(s *StateDB) {
 }
 
 func (ch accessListAddSlotChange) Dirtied() *common.Address {
-	return nil
-}
-
-func (ch suicideChange) Revert(s *StateDB) {
-	s.suicidedAddresses[*ch.account] = ch.prev
-}
-
-func (ch suicideChange) Dirtied() *common.Address {
 	return nil
 }
