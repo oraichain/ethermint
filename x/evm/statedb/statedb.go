@@ -29,14 +29,6 @@ import (
 	evm "github.com/evmos/ethermint/x/evm/vm"
 )
 
-// revision is the identifier of a version of state.
-// it consists of an auto-increment id and a journal index.
-// it's safer to use than using journal index alone.
-type revision struct {
-	id           int
-	journalIndex int
-}
-
 var _ vm.StateDB = &StateDB{}
 
 // StateDB structs within the ethereum protocol are used to store anything
@@ -47,22 +39,14 @@ var _ vm.StateDB = &StateDB{}
 type StateDB struct {
 	keeper evm.StateDBKeeper
 
-	ctx *SnapshotCommitCtx
-
-	ephemeralStore *StateDBStore
+	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
+	ephemeralStore *StateDBStore      // store for ephemeral data
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
 	journal *journal
-	// validRevisions []revision
-	// nextRevisionID int
-
-	// stateObjects map[common.Address]*stateObject
 
 	txConfig types.TxConfig
-
-	// The refund counter, also used by state transitioning.
-	refund uint64
 
 	// Per-transaction logs
 	logs []*ethtypes.Log
@@ -75,8 +59,8 @@ type StateDB struct {
 func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm.StateDB {
 	statedb := &StateDB{
 		keeper: keeper,
-		// This internally creates a branched ctx so Commit() is still required
-		// to write state to the ctx here.
+		// This internally creates a branched ctx so calling Commit() is required
+		// to write state to the incoming ctx.
 		ctx: NewSnapshotCtx(ctx),
 
 		journal:        newJournal(),
@@ -244,20 +228,21 @@ func (s *StateDB) getOrNewAccount(addr common.Address) *types.StateDBAccount {
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-
-	if account != nil {
-		// If there is already an account, zero out everything except for the balance ?
-		// This is done in previous StateDB
-
-		// Create a new account -- Must use NewEmptyAccount() so that the
-		// CodeHash is the actual hash of nil, not an empty byte slice
-		newAccount := types.NewEmptyAccount()
-		newAccount.Balance = account.Balance
-
-		s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *newAccount)
+	if account == nil {
+		// No account found, create a new one
+		s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *types.NewEmptyAccount())
+		return
 	}
 
-	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *types.NewEmptyAccount())
+	// If there is already an account, zero out everything except for the balance ?
+	// This is done in previous StateDB
+
+	// Create a new account -- Must use NewEmptyAccount() so that the
+	// CodeHash is the actual hash of nil, not an empty byte slice
+	newAccount := types.NewEmptyAccount()
+	newAccount.Balance = account.Balance
+
+	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *newAccount)
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.

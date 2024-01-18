@@ -117,14 +117,6 @@ type (
 	}
 )
 
-func (ch refundChange) Revert(s *StateDB) {
-	s.refund = ch.prev
-}
-
-func (ch refundChange) Dirtied() *common.Address {
-	return nil
-}
-
 func (ch addLogChange) Revert(s *StateDB) {
 	s.logs = s.logs[:len(s.logs)-1]
 }
