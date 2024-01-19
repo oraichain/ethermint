@@ -208,9 +208,7 @@ func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {} //nolint: re
 func (s *StateDB) getOrNewAccount(addr common.Address) *types.StateDBAccount {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
-		account = &types.StateDBAccount{
-			Balance: new(big.Int),
-		}
+		account = types.NewEmptyAccount()
 	}
 
 	return account
