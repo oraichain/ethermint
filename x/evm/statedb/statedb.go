@@ -404,7 +404,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
-	// Delete suicided accounts
+	// Delete suicided accounts -- these still need to be committed
 	suicidedAddrs := s.ephemeralStore.GetAllSuicided(s.ctx.CurrentCtx())
 	for _, addr := range suicidedAddrs {
 		// Balance is also cleared as part of Keeper.DeleteAccount
@@ -415,6 +415,8 @@ func (s *StateDB) Commit() error {
 
 	// Commit after account deletions
 	s.ctx.Commit()
+
+	// Journal only contains non-state content, so nothing to commit.
 
 	return nil
 }

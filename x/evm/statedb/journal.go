@@ -93,20 +93,6 @@ func (j *journal) length() int {
 }
 
 type (
-	// Changes to the account trie.
-	createObjectChange struct {
-		account *common.Address
-	}
-	resetObjectChange struct {
-		prev *stateObject
-	}
-
-	// Changes to other state values.
-	refundChange struct {
-		prev uint64
-	}
-	addLogChange struct{}
-
 	// Changes to the access list
 	accessListAddAccountChange struct {
 		address *common.Address
