@@ -253,14 +253,19 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	if amount.Sign() == 0 {
+	// Only allow positive amounts.
+	// TODO: Geth apparently allows negative amounts, but can cause negative
+	// balance which is not allowed in bank keeper
+	if amount.Sign() != 1 {
 		return
 	}
 
 	account := s.getOrNewAccount(addr)
 
 	account.Balance = new(big.Int).Add(account.Balance, amount)
-	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account)
+	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
+		panic(fmt.Errorf("failed to set account for balance addition: %w", err))
+	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.

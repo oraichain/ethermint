@@ -84,7 +84,9 @@ func (suite *KeeperTestSuite) TestAddBalance() {
 		{
 			"negative amount",
 			big.NewInt(-1),
-			false, // seems to be consistent with go-ethereum's implementation
+			// Pre-cache-ctx implementation allowed negative amounts, which
+			// seems to be consistent with go-ethereum's implementation
+			true,
 		},
 	}
 
