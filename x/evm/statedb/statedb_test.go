@@ -8,6 +8,8 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	xevm "github.com/evmos/ethermint/x/evm"
+	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/testutil"
 	"github.com/evmos/ethermint/x/evm/types"
@@ -48,13 +50,15 @@ func (suite *StateDBTestSuite) TestAccount() {
 			db.CreateAccount(address)
 			suite.Require().NoError(db.Commit())
 
-			keeper := db.Keeper().(*MockKeeper)
-			acct := keeper.Accounts[address]
-			suite.Require().Equal(types.NewEmptyAccount(), &acct.account)
-			suite.Require().Empty(acct.states)
-			suite.Require().False(acct.account.IsContract())
+			keeper := db.Keeper().(*keeper.Keeper)
+			acct := keeper.GetAccount(suite.Ctx, address)
+			states := suite.GetAllAccountStorage(suite.Ctx, address)
 
-			db = statedb.New(NewTestContext(), keeper, emptyTxConfig)
+			suite.Require().Equal(types.NewEmptyAccount(), acct)
+			suite.Require().Empty(states)
+			suite.Require().False(acct.IsContract())
+
+			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			suite.Require().Equal(true, db.Exist(address))
 			suite.Require().Equal(true, db.Empty(address))
 			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
@@ -76,7 +80,7 @@ func (suite *StateDBTestSuite) TestAccount() {
 			suite.Require().NoError(db.Commit())
 
 			// suicide
-			db = statedb.New(NewTestContext(), db.Keeper(), emptyTxConfig)
+			db = statedb.New(suite.Ctx, db.Keeper(), emptyTxConfig)
 			suite.Require().False(db.HasSuicided(address))
 			suite.Require().True(db.Suicide(address))
 
@@ -91,27 +95,32 @@ func (suite *StateDBTestSuite) TestAccount() {
 			suite.Require().NoError(db.Commit())
 
 			// not accessible from StateDB anymore
-			db = statedb.New(NewTestContext(), db.Keeper(), emptyTxConfig)
+			db = statedb.New(suite.Ctx, db.Keeper(), emptyTxConfig)
 			suite.Require().False(db.Exist(address))
 
 			// and cleared in keeper too
-			keeper := db.Keeper().(*MockKeeper)
-			suite.Require().Empty(keeper.Accounts)
-			suite.Require().Empty(keeper.Codes)
+			keeper := db.Keeper().(*keeper.Keeper)
+			acc := keeper.GetAccount(suite.Ctx, address)
+			states := suite.GetAllAccountStorage(suite.Ctx, address)
+
+			suite.Require().Empty(acc)
+			suite.Require().Empty(states)
 		}},
 	}
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			keeper := NewMockKeeper()
-			db := statedb.New(NewTestContext(), keeper, emptyTxConfig)
+			suite.SetupTest()
+
+			keeper := suite.App.EvmKeeper
+			db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			tc.malleate(db)
 		})
 	}
 }
 
 func (suite *StateDBTestSuite) TestAccountOverride() {
-	keeper := NewMockKeeper()
-	db := statedb.New(NewTestContext(), keeper, emptyTxConfig)
+	keeper := suite.App.EvmKeeper
+	db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 	// test balance carry over when overwritten
 	amount := big.NewInt(1)
 
@@ -142,7 +151,8 @@ func (suite *StateDBTestSuite) TestDBError() {
 		}},
 	}
 	for _, tc := range testCases {
-		db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+		suite.SetupTest()
+		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 		tc.malleate(db)
 		suite.Require().Error(db.Commit())
 	}
@@ -195,17 +205,19 @@ func (suite *StateDBTestSuite) TestState() {
 	testCases := []struct {
 		name      string
 		malleate  func(evm.StateDB)
-		expStates statedb.Storage
+		expStates map[common.Hash]common.Hash
 	}{
 		{"empty state", func(db evm.StateDB) {
 		}, nil},
 		{"set empty value", func(db evm.StateDB) {
 			db.SetState(address, key1, common.Hash{})
-		}, statedb.Storage{}},
+		}, map[common.Hash]common.Hash(nil)},
 		{"noop state change", func(db evm.StateDB) {
+			// TODO: This doesn't actually change anything compared to committed state
+			// so it shouldn't be written to the keeper
 			db.SetState(address, key1, value1)
 			db.SetState(address, key1, common.Hash{})
-		}, statedb.Storage{}},
+		}, map[common.Hash]common.Hash(nil)},
 		{"set state", func(db evm.StateDB) {
 			// check empty initial state
 			suite.Require().Equal(common.Hash{}, db.GetState(address, key1))
@@ -221,23 +233,26 @@ func (suite *StateDBTestSuite) TestState() {
 			// set same value again, should be noop
 			db.SetState(address, key1, value1)
 			suite.Require().Equal(value1, db.GetState(address, key1))
-		}, statedb.Storage{
+		}, map[common.Hash]common.Hash{
 			key1: value1,
 		}},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			keeper := NewMockKeeper()
-			db := statedb.New(NewTestContext(), keeper, emptyTxConfig)
+			suite.SetupTest()
+
+			keeper := suite.App.EvmKeeper
+			db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			tc.malleate(db)
 			suite.Require().NoError(db.Commit())
 
 			// check committed states in keeper
-			suite.Require().Equal(tc.expStates, keeper.Accounts[address].states)
+			states := suite.GetAllAccountStorage(suite.Ctx, address)
+			suite.Require().Equal(tc.expStates, states)
 
 			// check ForEachStorage
-			db = statedb.New(NewTestContext(), keeper, emptyTxConfig)
+			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			collected := CollectContractStorage(db)
 			if len(tc.expStates) > 0 {
 				suite.Require().Equal(tc.expStates, collected)
@@ -269,8 +284,8 @@ func (suite *StateDBTestSuite) TestCode() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			keeper := NewMockKeeper()
-			db := statedb.New(NewTestContext(), keeper, emptyTxConfig)
+			keeper := suite.App.EvmKeeper
+			db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			tc.malleate(db)
 
 			// check dirty state
@@ -281,7 +296,7 @@ func (suite *StateDBTestSuite) TestCode() {
 			suite.Require().NoError(db.Commit())
 
 			// check again
-			db = statedb.New(NewTestContext(), keeper, emptyTxConfig)
+			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			suite.Require().Equal(tc.expCode, db.GetCode(address))
 			suite.Require().Equal(len(tc.expCode), db.GetCodeSize(address))
 			suite.Require().Equal(tc.expCodeHash, db.GetCodeHash(address))
@@ -334,8 +349,10 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 	}
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			ctx := NewTestContext()
-			keeper := NewMockKeeper()
+			suite.SetupTest()
+
+			ctx := suite.Ctx
+			keeper := suite.App.EvmKeeper
 
 			{
 				// do some arbitrary changes to the storage
@@ -348,7 +365,7 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 				suite.Require().NoError(db.Commit())
 			}
 
-			originalKeeper := keeper.Clone()
+			originalState := xevm.ExportGenesis(suite.Ctx, keeper, suite.App.AccountKeeper)
 
 			// run test
 			db := statedb.New(ctx, keeper, emptyTxConfig)
@@ -362,8 +379,10 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 
 			suite.Require().NoError(db.Commit())
 
-			// check keeper should stay the same
-			suite.Require().Equal(originalKeeper, keeper)
+			revertState := xevm.ExportGenesis(suite.Ctx, keeper, suite.App.AccountKeeper)
+
+			// check keeper state should stay the same
+			suite.Require().Equal(originalState, revertState)
 		})
 	}
 }
@@ -373,7 +392,7 @@ func (suite *StateDBTestSuite) TestNestedSnapshot() {
 	value1 := common.BigToHash(big.NewInt(1))
 	value2 := common.BigToHash(big.NewInt(2))
 
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	rev1 := db.Snapshot()
 	db.SetState(address, key, value1)
@@ -390,7 +409,7 @@ func (suite *StateDBTestSuite) TestNestedSnapshot() {
 }
 
 func (suite *StateDBTestSuite) TestInvalidSnapshotId() {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	suite.Require().Panics(func() {
 		db.RevertToSnapshot(1)
 	})
@@ -439,6 +458,8 @@ func (suite *StateDBTestSuite) TestAccessList() {
 			suite.Require().True(slotPresent)
 		}},
 		{"prepare access list", func(db vm.StateDB) {
+			suite.SetupTest()
+
 			al := ethtypes.AccessList{{
 				Address:     address3,
 				StorageKeys: []common.Hash{value1},
@@ -462,7 +483,7 @@ func (suite *StateDBTestSuite) TestAccessList() {
 	}
 
 	for _, tc := range testCases {
-		db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 		tc.malleate(db)
 	}
 }
@@ -475,7 +496,7 @@ func (suite *StateDBTestSuite) TestLog() {
 		txHash,
 		1, 1,
 	)
-	db := statedb.New(NewTestContext(), NewMockKeeper(), txConfig)
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, txConfig)
 	data := []byte("hello world")
 	db.AddLog(&ethtypes.Log{
 		Address:     address,
@@ -484,7 +505,7 @@ func (suite *StateDBTestSuite) TestLog() {
 		BlockNumber: 1,
 	})
 	suite.Require().Equal(1, len(db.Logs()))
-	expecedLog := &ethtypes.Log{
+	expectedLog := &ethtypes.Log{
 		Address:     address,
 		Topics:      []common.Hash{},
 		Data:        data,
@@ -494,7 +515,7 @@ func (suite *StateDBTestSuite) TestLog() {
 		TxIndex:     1,
 		Index:       1,
 	}
-	suite.Require().Equal(expecedLog, db.Logs()[0])
+	suite.Require().Equal(expectedLog, db.Logs()[0])
 
 	db.AddLog(&ethtypes.Log{
 		Address:     address,
@@ -503,8 +524,8 @@ func (suite *StateDBTestSuite) TestLog() {
 		BlockNumber: 1,
 	})
 	suite.Require().Equal(2, len(db.Logs()))
-	expecedLog.Index++
-	suite.Require().Equal(expecedLog, db.Logs()[1])
+	expectedLog.Index++
+	suite.Require().Equal(expectedLog, db.Logs()[1])
 }
 
 func (suite *StateDBTestSuite) TestRefund() {
@@ -527,7 +548,9 @@ func (suite *StateDBTestSuite) TestRefund() {
 		}, 0, true},
 	}
 	for _, tc := range testCases {
-		db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+		suite.SetupTest()
+
+		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 		if !tc.expPanic {
 			tc.malleate(db)
 			suite.Require().Equal(tc.expRefund, db.GetRefund())
@@ -545,8 +568,8 @@ func (suite *StateDBTestSuite) TestIterateStorage() {
 	key2 := common.BigToHash(big.NewInt(3))
 	value2 := common.BigToHash(big.NewInt(4))
 
-	keeper := NewMockKeeper()
-	db := statedb.New(NewTestContext(), keeper, emptyTxConfig)
+	keeper := suite.App.EvmKeeper
+	db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 	db.SetState(address, key1, value1)
 	db.SetState(address, key2, value2)
 
@@ -557,7 +580,9 @@ func (suite *StateDBTestSuite) TestIterateStorage() {
 
 	storage := CollectContractStorage(db)
 	suite.Require().Equal(2, len(storage))
-	suite.Require().Equal(keeper.Accounts[address].states, storage)
+
+	accStorages := suite.GetAllAccountStorage(suite.Ctx, address)
+	suite.Require().Equal(accStorages, storage)
 
 	// break early iteration
 	storage = make(statedb.Storage)
@@ -569,8 +594,8 @@ func (suite *StateDBTestSuite) TestIterateStorage() {
 	suite.Require().Equal(1, len(storage))
 }
 
-func CollectContractStorage(db vm.StateDB) statedb.Storage {
-	storage := make(statedb.Storage)
+func CollectContractStorage(db vm.StateDB) map[common.Hash]common.Hash {
+	storage := make(map[common.Hash]common.Hash)
 	db.ForEachStorage(address, func(k, v common.Hash) bool {
 		storage[k] = v
 		return true

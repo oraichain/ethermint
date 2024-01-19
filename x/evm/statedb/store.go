@@ -13,8 +13,9 @@ var (
 	AccessListAddressSlotKey = []byte{0x02} // (common.Address, common.Hash)
 
 	LogKey      = []byte{0x03}
-	RefundKey   = []byte{0x04}
-	SuicidedKey = []byte{0x05}
+	LogIndexKey = []byte{0x04}
+	RefundKey   = []byte{0x05}
+	SuicidedKey = []byte{0x06}
 )
 
 type StateDBStore struct {
@@ -27,21 +28,38 @@ func NewStateDBStore(storeKey storetypes.StoreKey) *StateDBStore {
 	}
 }
 
+// GetLogIndex returns the current log index.
+func (ls *StateDBStore) GetLogIndex(ctx sdk.Context) uint {
+	store := prefix.NewStore(ctx.KVStore(ls.key), LogIndexKey)
+	bz := store.Get(LogIndexKey)
+	if bz == nil {
+		return 0
+	}
+
+	index := sdk.BigEndianToUint64(bz)
+	return uint(index)
+}
+
+func (ls *StateDBStore) SetLogIndex(ctx sdk.Context, index uint) {
+	store := prefix.NewStore(ctx.KVStore(ls.key), LogIndexKey)
+	store.Set(LogIndexKey, sdk.Uint64ToBigEndian(uint64(index)))
+}
+
 // AddLog adds a log to the store.
 func (ls *StateDBStore) AddLog(ctx sdk.Context, log *ethtypes.Log) {
 	store := prefix.NewStore(ctx.KVStore(ls.key), LogKey)
-
 	bz, err := log.MarshalJSON()
 	if err != nil {
 		panic(err)
 	}
-	store.Set(log.Address.Bytes(), bz)
+
+	store.Set(sdk.Uint64ToBigEndian(uint64(log.Index)), bz)
 }
 
 func (ls *StateDBStore) GetAllLogs(ctx sdk.Context) []*ethtypes.Log {
 	store := prefix.NewStore(ctx.KVStore(ls.key), LogKey)
 
-	logs := make([]*ethtypes.Log, 0)
+	var logs []*ethtypes.Log
 
 	iter := sdk.KVStorePrefixIterator(store, []byte{})
 	defer iter.Close()
@@ -62,18 +80,18 @@ func (ls *StateDBStore) GetAllLogs(ctx sdk.Context) []*ethtypes.Log {
 func (ls *StateDBStore) AddRefund(ctx sdk.Context, gas uint64) {
 	store := prefix.NewStore(ctx.KVStore(ls.key), RefundKey)
 	// Add to existing refund
-	bz := store.Get([]byte{})
+	bz := store.Get(RefundKey)
 	if bz != nil {
 		gas += sdk.BigEndianToUint64(bz)
 	}
 
-	store.Set([]byte{}, sdk.Uint64ToBigEndian(gas))
+	store.Set(RefundKey, sdk.Uint64ToBigEndian(gas))
 }
 
 func (ls *StateDBStore) SubRefund(ctx sdk.Context, gas uint64) {
 	store := prefix.NewStore(ctx.KVStore(ls.key), RefundKey)
 	// Subtract from existing refund
-	bz := store.Get([]byte{})
+	bz := store.Get(RefundKey)
 	if bz == nil {
 		panic("no refund to subtract from")
 	}
@@ -85,12 +103,12 @@ func (ls *StateDBStore) SubRefund(ctx sdk.Context, gas uint64) {
 	}
 
 	gas = refund - gas
-	store.Set([]byte{}, sdk.Uint64ToBigEndian(gas))
+	store.Set(RefundKey, sdk.Uint64ToBigEndian(gas))
 }
 
 func (ls *StateDBStore) GetRefund(ctx sdk.Context) uint64 {
 	store := prefix.NewStore(ctx.KVStore(ls.key), RefundKey)
-	bz := store.Get([]byte{})
+	bz := store.Get(RefundKey)
 	if bz == nil {
 		return 0
 	}
@@ -110,7 +128,7 @@ func (ls *StateDBStore) GetAccountSuicided(ctx sdk.Context, addr common.Address)
 func (ls *StateDBStore) GetAllSuicided(ctx sdk.Context) []common.Address {
 	store := prefix.NewStore(ctx.KVStore(ls.key), SuicidedKey)
 
-	addrs := make([]common.Address, 0)
+	var addrs []common.Address
 
 	iter := sdk.KVStorePrefixIterator(store, []byte{})
 	defer iter.Close()
