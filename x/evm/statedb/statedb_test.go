@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/testutil"
 	"github.com/evmos/ethermint/x/evm/types"
 	evm "github.com/evmos/ethermint/x/evm/vm"
 	"github.com/stretchr/testify/suite"
@@ -23,7 +24,7 @@ var (
 )
 
 type StateDBTestSuite struct {
-	suite.Suite
+	testutil.KeeperTestSuite
 }
 
 func (suite *StateDBTestSuite) TestAccount() {
@@ -173,15 +174,17 @@ func (suite *StateDBTestSuite) TestBalance() {
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
-			keeper := NewMockKeeper()
-			db := statedb.New(NewTestContext(), keeper, emptyTxConfig)
+			suite.SetupTest()
+
+			keeper := suite.App.EvmKeeper
+			db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			tc.malleate(db)
 
 			// check dirty state
 			suite.Require().Equal(tc.expBalance, db.GetBalance(address))
 			suite.Require().NoError(db.Commit())
 			// check committed balance too
-			suite.Require().Equal(tc.expBalance, keeper.Accounts[address].account.Balance)
+			suite.Require().Equal(tc.expBalance, keeper.GetBalance(suite.Ctx, address))
 		})
 	}
 }
