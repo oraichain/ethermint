@@ -48,9 +48,6 @@ type StateDB struct {
 
 	txConfig types.TxConfig
 
-	// Per-transaction logs
-	logs []*ethtypes.Log
-
 	// Per-transaction access list
 	accessList *accessList
 }
@@ -83,9 +80,10 @@ func (s *StateDB) AddLog(log *ethtypes.Log) {
 	log.TxHash = s.txConfig.TxHash
 	log.BlockHash = s.txConfig.BlockHash
 	log.TxIndex = s.txConfig.TxIndex
-	log.Index = s.txConfig.LogIndex + uint(len(s.logs))
+	log.Index = s.txConfig.LogIndex + uint(s.ephemeralStore.GetLogIndex(s.ctx.CurrentCtx()))
 
 	s.ephemeralStore.AddLog(s.ctx.CurrentCtx(), log)
+	s.ephemeralStore.SetLogIndex(s.ctx.CurrentCtx(), log.Index)
 }
 
 // Logs returns the logs of current transaction.
@@ -245,7 +243,7 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
 func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
-	s.keeper.ForEachStorage(s.ctx.CurrentCtx(), addr, cb)
+	s.keeper.ForEachStorage(s.ctx.initialCtx, addr, cb)
 	return nil
 }
 
@@ -401,9 +399,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
-	s.ctx.Commit()
-
-	// Commit suicided accounts
+	// Delete suicided accounts
 	suicidedAddrs := s.ephemeralStore.GetAllSuicided(s.ctx.CurrentCtx())
 	for _, addr := range suicidedAddrs {
 		// Balance is also cleared as part of Keeper.DeleteAccount
@@ -411,6 +407,9 @@ func (s *StateDB) Commit() error {
 			panic(fmt.Errorf("failed to delete suicided account: %w", err))
 		}
 	}
+
+	// Commit after account deletions
+	s.ctx.Commit()
 
 	return nil
 }

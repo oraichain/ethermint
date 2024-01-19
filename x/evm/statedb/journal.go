@@ -117,14 +117,6 @@ type (
 	}
 )
 
-func (ch addLogChange) Revert(s *StateDB) {
-	s.logs = s.logs[:len(s.logs)-1]
-}
-
-func (ch addLogChange) Dirtied() *common.Address {
-	return nil
-}
-
 func (ch accessListAddAccountChange) Revert(s *StateDB) {
 	/*
 		One important invariant here, is that whenever a (addr, slot) is added, if the
