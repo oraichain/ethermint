@@ -47,7 +47,7 @@ func (al *accessList) Contains(address common.Address, slot common.Hash) (addres
 	return true, slotPresent
 }
 
-// newaccessListOld creates a new accessListOld.
+// newAccessList creates a new newAccessList.
 func newAccessList() *accessList {
 	return &accessList{
 		addresses: make(map[common.Address]int),
