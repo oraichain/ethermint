@@ -8,7 +8,9 @@ import (
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/testutil"
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
@@ -33,7 +35,9 @@ func NewTestContext() sdk.Context {
 }
 
 func benchmarkNestedSnapshot(b *testing.B, layers int) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	for i := 0; i < layers; i++ {
 		db.Snapshot()
@@ -69,13 +73,17 @@ func BenchmarkNestedSnapshot16(b *testing.B) {
 }
 
 func benchmarkRevertToSnapshot(b *testing.B, layers int) {
+	suite := GetTestSuite()
+
+	b.ResetTimer()
+
 	for i := 0; i < b.N; i++ {
 		// Stop timer for setup -- can't be done before loop since we need to
 		// reset the database after each revert
 		// TODO: This takes way too long since RevertToSnapshot is really quick
 		// compared to the setup
 		b.StopTimer()
-		db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 		for i := 0; i < layers; i++ {
 			db.Snapshot()
@@ -107,7 +115,9 @@ func BenchmarkRevertToSnapshot16(b *testing.B) {
 }
 
 func BenchmarkAddBalance(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
 
@@ -117,7 +127,8 @@ func BenchmarkAddBalance(b *testing.B) {
 }
 
 func BenchmarkSubBalance(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
 
@@ -127,7 +138,8 @@ func BenchmarkSubBalance(b *testing.B) {
 }
 
 func BenchmarkGetBalance(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
 
@@ -137,7 +149,8 @@ func BenchmarkGetBalance(b *testing.B) {
 }
 
 func BenchmarkGetNonce(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
 
@@ -147,7 +160,8 @@ func BenchmarkGetNonce(b *testing.B) {
 }
 
 func BenchmarkSetNonce(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
 
@@ -157,7 +171,8 @@ func BenchmarkSetNonce(b *testing.B) {
 }
 
 func BenchmarkGetCodeHash(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
 
@@ -167,7 +182,8 @@ func BenchmarkGetCodeHash(b *testing.B) {
 }
 
 func BenchmarkGetCode(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
 
@@ -177,7 +193,8 @@ func BenchmarkGetCode(b *testing.B) {
 }
 
 func BenchmarkAddLog(b *testing.B) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	log := &ethtypes.Log{
 		Address: address,
 		Topics:  []common.Hash{common.BigToHash(big.NewInt(1))},
@@ -191,7 +208,8 @@ func BenchmarkAddLog(b *testing.B) {
 }
 
 func benchmarkGetLogs(b *testing.B, logEntries int) {
-	db := statedb.New(NewTestContext(), NewMockKeeper(), emptyTxConfig)
+	suite := GetTestSuite()
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	for i := 0; i < logEntries; i++ {
 		log := &ethtypes.Log{
@@ -222,4 +240,20 @@ func BenchmarkGetLogs64(b *testing.B) {
 
 func BenchmarkGetLogs512(b *testing.B) {
 	benchmarkGetLogs(b, 512)
+}
+
+func GetTestSuite() *testutil.KeeperTestSuite {
+	// Just reuse the keeper test suite to setup and create a testing app
+	suite := testutil.KeeperTestSuite{}
+	suite.SetupTest()
+
+	return &suite
+}
+
+func GetTestKeeper() *keeper.Keeper {
+	// Just reuse the keeper test suite to setup and create a keeper
+	suite := testutil.KeeperTestSuite{}
+	suite.SetupTest()
+
+	return suite.App.EvmKeeper
 }

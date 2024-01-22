@@ -17,9 +17,6 @@
 package statedb
 
 import (
-	"bytes"
-	"sort"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -46,20 +43,6 @@ func newJournal() *journal {
 	return &journal{
 		dirties: make(map[common.Address]int),
 	}
-}
-
-// sortedDirties sort the dirty addresses for deterministic iteration
-func (j *journal) sortedDirties() []common.Address {
-	keys := make([]common.Address, len(j.dirties))
-	i := 0
-	for k := range j.dirties {
-		keys[i] = k
-		i++
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) < 0
-	})
-	return keys
 }
 
 // append inserts a new modification entry to the end of the change journal.

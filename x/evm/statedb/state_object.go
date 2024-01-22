@@ -17,12 +17,10 @@ package statedb
 
 import (
 	"bytes"
-	"math/big"
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/x/evm/types"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
@@ -42,31 +40,4 @@ func (s Storage) SortedKeys() []common.Hash {
 		return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) < 0
 	})
 	return keys
-}
-
-// stateObject is the state of an acount
-type stateObject struct {
-	db *StateDB
-
-	address common.Address
-
-	suicided bool
-}
-
-// newObject creates a state object.
-func newObject(db *StateDB, address common.Address, account types.StateDBAccount) *stateObject {
-	if account.Balance == nil {
-		account.Balance = new(big.Int)
-	}
-	if account.CodeHash == nil {
-		account.CodeHash = emptyCodeHash
-	}
-	return &stateObject{
-		db:      db,
-		address: address,
-	}
-}
-
-func (s *stateObject) markSuicided() {
-	s.suicided = true
 }

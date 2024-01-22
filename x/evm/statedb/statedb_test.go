@@ -23,6 +23,9 @@ var (
 	address3      common.Address = common.BigToAddress(big.NewInt(103))
 	blockHash     common.Hash    = common.BigToHash(big.NewInt(9999))
 	emptyTxConfig types.TxConfig = types.NewEmptyTxConfig(blockHash)
+
+	errAddress    common.Address = common.BigToAddress(big.NewInt(100))
+	emptyCodeHash                = crypto.Keccak256(nil)
 )
 
 type StateDBTestSuite struct {
