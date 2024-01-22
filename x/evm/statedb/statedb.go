@@ -386,7 +386,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	return s.ctx.Snapshot()
+	return s.ctx.Snapshot(s.journal.length())
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
