@@ -20,9 +20,10 @@ type SnapshotCommitCtx struct {
 // NewSnapshotCtx creates a new SnapshotCtx from the initial context.
 func NewSnapshotCtx(initialCtx sdk.Context) *SnapshotCommitCtx {
 	sCtx := &SnapshotCommitCtx{
-		initialCtx:     initialCtx,
-		snapshots:      nil,
-		nextSnapshotID: 0,
+		initialCtx: initialCtx,
+		snapshots:  nil,
+		// Starts at -1 so the first snapshot is 0
+		nextSnapshotID: -1,
 	}
 
 	// Create an initial snapshot of the initialCtx so no state is written until
