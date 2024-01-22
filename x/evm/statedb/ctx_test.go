@@ -26,7 +26,7 @@ func TestSnapshotCommitCtx(t *testing.T) {
 
 	// Make a snapshot
 	previousCtx := snapshotCtx.CurrentCtx()
-	snapshotID := snapshotCtx.Snapshot()
+	snapshotID := snapshotCtx.Snapshot(0)
 	require.Equal(t, 1, snapshotID, "snapshot id should be 1")
 	require.NotEqual(t, previousCtx, snapshotCtx.CurrentCtx(), "CurrentCtx should be branched")
 
@@ -52,7 +52,7 @@ func TestRevert(t *testing.T) {
 	snapshotCtx := statedb.NewSnapshotCtx(initialCtx)
 
 	// Make a snapshot
-	snapshotID := snapshotCtx.Snapshot()
+	snapshotID := snapshotCtx.Snapshot(0)
 
 	// Revert to the snapshot
 	snapshotCtx.Revert(snapshotID)

@@ -11,7 +11,7 @@ import (
 // only write state to the initial context when Commit() is called.
 type SnapshotCommitCtx struct {
 	initialCtx sdk.Context
-	snapshots  []ctxSnapshot
+	snapshots  []CtxSnapshot
 
 	// always incrementing snapshot ID, used to identify snapshots.
 	nextSnapshotID int
@@ -45,9 +45,9 @@ func (c *SnapshotCommitCtx) CurrentCtx() sdk.Context {
 
 // CurrentSnapshot returns the current snapshot and true if there is one, or
 // false if there are no snapshots.
-func (c *SnapshotCommitCtx) CurrentSnapshot() (ctxSnapshot, bool) {
+func (c *SnapshotCommitCtx) CurrentSnapshot() (CtxSnapshot, bool) {
 	if len(c.snapshots) == 0 {
-		return ctxSnapshot{}, false
+		return CtxSnapshot{}, false
 	}
 
 	return c.snapshots[len(c.snapshots)-1], true
@@ -64,7 +64,7 @@ func (c *SnapshotCommitCtx) Snapshot(
 	newCtx, newWrite := c.CurrentCtx().CacheContext()
 
 	// Save the new snapshot to the list
-	c.snapshots = append(c.snapshots, ctxSnapshot{
+	c.snapshots = append(c.snapshots, CtxSnapshot{
 		id:    id,
 		ctx:   newCtx,
 		write: newWrite,
@@ -108,8 +108,8 @@ func (c *SnapshotCommitCtx) Commit() {
 	}
 }
 
-// ctxSnapshot is a single snapshot with a branched context.
-type ctxSnapshot struct {
+// CtxSnapshot is a single snapshot with a branched context.
+type CtxSnapshot struct {
 	id    int
 	ctx   sdk.Context
 	write func()

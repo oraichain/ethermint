@@ -71,8 +71,6 @@ type KeeperTestSuite struct {
 	denom            string
 }
 
-var s *KeeperTestSuite
-
 func (suite *KeeperTestSuite) SetupTest() {
 	checkTx := false
 	suite.App = app.Setup(checkTx, nil)

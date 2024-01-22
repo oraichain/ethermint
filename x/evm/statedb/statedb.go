@@ -40,7 +40,7 @@ type StateDB struct {
 	keeper evm.StateDBKeeper
 
 	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
-	ephemeralStore *StateDBStore      // store for ephemeral data
+	ephemeralStore *Store             // store for ephemeral data
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -80,7 +80,7 @@ func (s *StateDB) AddLog(log *ethtypes.Log) {
 	log.TxHash = s.txConfig.TxHash
 	log.BlockHash = s.txConfig.BlockHash
 	log.TxIndex = s.txConfig.TxIndex
-	log.Index = s.txConfig.LogIndex + uint(s.ephemeralStore.GetLogIndex(s.ctx.CurrentCtx()))
+	log.Index = s.txConfig.LogIndex + s.ephemeralStore.GetLogIndex(s.ctx.CurrentCtx())
 
 	s.ephemeralStore.AddLog(s.ctx.CurrentCtx(), log)
 	s.ephemeralStore.SetLogIndex(s.ctx.CurrentCtx(), log.Index)
@@ -226,7 +226,9 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
 		// No account found, create a new one
-		s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *types.NewEmptyAccount())
+		if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *types.NewEmptyAccount()); err != nil {
+			panic(fmt.Errorf("failed to create account: %w", err))
+		}
 		return
 	}
 
@@ -238,7 +240,9 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	newAccount := types.NewEmptyAccount()
 	newAccount.Balance = account.Balance
 
-	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *newAccount)
+	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *newAccount); err != nil {
+		panic(fmt.Errorf("failed to create account: %w", err))
+	}
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
@@ -277,7 +281,9 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 	account := s.getOrNewAccount(addr)
 
 	account.Balance = new(big.Int).Sub(account.Balance, amount)
-	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account)
+	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
+		panic(fmt.Errorf("failed to set account for balance subtraction: %w", err))
+	}
 }
 
 // SetNonce sets the nonce of account.
@@ -285,15 +291,19 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 	account := s.getOrNewAccount(addr)
 
 	account.Nonce = nonce
-	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account)
+	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
+		panic(fmt.Errorf("failed to set account for nonce: %w", err))
+	}
 }
 
 // SetCode sets the code of account.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	account := s.getOrNewAccount(addr)
 	account.CodeHash = crypto.Keccak256Hash(code).Bytes()
-	s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account)
 
+	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
+		panic(fmt.Errorf("failed to set account for code: %w", err))
+	}
 	s.keeper.SetCode(s.ctx.CurrentCtx(), account.CodeHash, code)
 }
 
