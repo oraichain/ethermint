@@ -141,6 +141,9 @@ func BenchmarkSubBalance(b *testing.B) {
 
 	amt := big.NewInt(10)
 
+	// Add enough balance to cover all subtractions
+	vmdb.AddBalance(suite.address, new(big.Int).Mul(amt, big.NewInt(int64(b.N))))
+
 	b.ResetTimer()
 	b.ReportAllocs()
 

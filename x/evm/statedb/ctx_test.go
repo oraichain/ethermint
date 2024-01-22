@@ -27,7 +27,7 @@ func TestSnapshotCommitCtx(t *testing.T) {
 	// Make a snapshot
 	previousCtx := snapshotCtx.CurrentCtx()
 	snapshotID := snapshotCtx.Snapshot(0)
-	require.Equal(t, 1, snapshotID, "snapshot id should be 1")
+	require.Equal(t, 0, snapshotID, "initial snapshot id should be 0")
 	require.NotEqual(t, previousCtx, snapshotCtx.CurrentCtx(), "CurrentCtx should be branched")
 
 	// Write to the snapshot

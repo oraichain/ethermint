@@ -35,7 +35,7 @@ func NewTestContext() sdk.Context {
 }
 
 func benchmarkNestedSnapshot(b *testing.B, layers int) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
@@ -72,50 +72,8 @@ func BenchmarkNestedSnapshot16(b *testing.B) {
 	benchmarkNestedSnapshot(b, 16)
 }
 
-func benchmarkRevertToSnapshot(b *testing.B, layers int) {
-	suite := GetTestSuite()
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		// Stop timer for setup -- can't be done before loop since we need to
-		// reset the database after each revert
-		// TODO: This takes way too long since RevertToSnapshot is really quick
-		// compared to the setup
-		b.StopTimer()
-		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-
-		for i := 0; i < layers; i++ {
-			db.Snapshot()
-
-			key := common.BigToHash(big.NewInt(int64(i)))
-			value := common.BigToHash(big.NewInt(int64(i + 1)))
-			db.SetState(address, key, value)
-		}
-		b.StartTimer()
-
-		db.RevertToSnapshot(0)
-	}
-}
-
-func BenchmarkRevertToSnapshot1(b *testing.B) {
-	benchmarkRevertToSnapshot(b, 1)
-}
-
-func BenchmarkRevertToSnapshot4(b *testing.B) {
-	benchmarkRevertToSnapshot(b, 4)
-}
-
-func BenchmarkRevertToSnapshot8(b *testing.B) {
-	benchmarkRevertToSnapshot(b, 8)
-}
-
-func BenchmarkRevertToSnapshot16(b *testing.B) {
-	benchmarkRevertToSnapshot(b, 16)
-}
-
 func BenchmarkAddBalance(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
@@ -127,7 +85,7 @@ func BenchmarkAddBalance(b *testing.B) {
 }
 
 func BenchmarkSubBalance(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
@@ -138,7 +96,7 @@ func BenchmarkSubBalance(b *testing.B) {
 }
 
 func BenchmarkGetBalance(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
@@ -149,7 +107,7 @@ func BenchmarkGetBalance(b *testing.B) {
 }
 
 func BenchmarkGetNonce(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
@@ -160,7 +118,7 @@ func BenchmarkGetNonce(b *testing.B) {
 }
 
 func BenchmarkSetNonce(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
@@ -171,7 +129,7 @@ func BenchmarkSetNonce(b *testing.B) {
 }
 
 func BenchmarkGetCodeHash(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
@@ -182,7 +140,7 @@ func BenchmarkGetCodeHash(b *testing.B) {
 }
 
 func BenchmarkGetCode(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	b.ResetTimer()
@@ -193,7 +151,7 @@ func BenchmarkGetCode(b *testing.B) {
 }
 
 func BenchmarkAddLog(b *testing.B) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	log := &ethtypes.Log{
 		Address: address,
@@ -208,7 +166,7 @@ func BenchmarkAddLog(b *testing.B) {
 }
 
 func benchmarkGetLogs(b *testing.B, logEntries int) {
-	suite := GetTestSuite()
+	suite := GetTestSuite(b)
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
 	for i := 0; i < logEntries; i++ {
@@ -242,10 +200,10 @@ func BenchmarkGetLogs512(b *testing.B) {
 	benchmarkGetLogs(b, 512)
 }
 
-func GetTestSuite() *testutil.KeeperTestSuite {
+func GetTestSuite(b *testing.B) *testutil.KeeperTestSuite {
 	// Just reuse the keeper test suite to setup and create a testing app
 	suite := testutil.KeeperTestSuite{}
-	suite.SetupTest()
+	suite.SetupTestWithT(b)
 
 	return &suite
 }
