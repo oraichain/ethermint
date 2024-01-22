@@ -27,7 +27,7 @@ func NewSnapshotCtx(initialCtx sdk.Context) *SnapshotCommitCtx {
 
 	// Create an initial snapshot of the initialCtx so no state is written until
 	// Commit() is called.
-	_ = sCtx.Snapshot()
+	_ = sCtx.Snapshot(0)
 
 	return sCtx
 }
@@ -53,7 +53,9 @@ func (c *SnapshotCommitCtx) CurrentSnapshot() (ctxSnapshot, bool) {
 }
 
 // Snapshot creates a new branched context and returns the revision id.
-func (c *SnapshotCommitCtx) Snapshot() int {
+func (c *SnapshotCommitCtx) Snapshot(
+	journalIndex int,
+) int {
 	id := c.nextSnapshotID
 	c.nextSnapshotID++
 
@@ -66,8 +68,7 @@ func (c *SnapshotCommitCtx) Snapshot() int {
 		ctx:   newCtx,
 		write: newWrite,
 
-		// TODO: If still used later
-		// journalIndex: s.journal.length(),
+		journalIndex: journalIndex,
 	})
 
 	return id
