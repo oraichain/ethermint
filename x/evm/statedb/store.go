@@ -5,17 +5,14 @@ import (
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
-	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 var (
 	AccessListAddressKey     = []byte{0x01} // common.Address
 	AccessListAddressSlotKey = []byte{0x02} // (common.Address, common.Hash)
 
-	LogKey      = []byte{0x03}
-	LogIndexKey = []byte{0x04}
-	RefundKey   = []byte{0x05}
-	SuicidedKey = []byte{0x06}
+	RefundKey   = []byte{0x03}
+	SuicidedKey = []byte{0x04}
 )
 
 type Store struct {
@@ -26,54 +23,6 @@ func NewStateDBStore(storeKey storetypes.StoreKey) *Store {
 	return &Store{
 		key: storeKey,
 	}
-}
-
-// GetLogIndex returns the current log index.
-func (ls *Store) GetLogIndex(ctx sdk.Context) uint {
-	store := prefix.NewStore(ctx.KVStore(ls.key), LogIndexKey)
-	bz := store.Get(LogIndexKey)
-	if bz == nil {
-		return 0
-	}
-
-	index := sdk.BigEndianToUint64(bz)
-	return uint(index)
-}
-
-func (ls *Store) SetLogIndex(ctx sdk.Context, index uint) {
-	store := prefix.NewStore(ctx.KVStore(ls.key), LogIndexKey)
-	store.Set(LogIndexKey, sdk.Uint64ToBigEndian(uint64(index)))
-}
-
-// AddLog adds a log to the store.
-func (ls *Store) AddLog(ctx sdk.Context, log *ethtypes.Log) {
-	store := prefix.NewStore(ctx.KVStore(ls.key), LogKey)
-	bz, err := log.MarshalJSON()
-	if err != nil {
-		panic(err)
-	}
-
-	store.Set(sdk.Uint64ToBigEndian(uint64(log.Index)), bz)
-}
-
-func (ls *Store) GetAllLogs(ctx sdk.Context) []*ethtypes.Log {
-	store := prefix.NewStore(ctx.KVStore(ls.key), LogKey)
-
-	var logs []*ethtypes.Log
-
-	iter := sdk.KVStorePrefixIterator(store, []byte{})
-	defer iter.Close()
-
-	for ; iter.Valid(); iter.Next() {
-		var log ethtypes.Log
-		err := log.UnmarshalJSON(iter.Value())
-		if err != nil {
-			panic(err)
-		}
-		logs = append(logs, &log)
-	}
-
-	return logs
 }
 
 // AddRefund adds a refund to the store.

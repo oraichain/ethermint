@@ -50,6 +50,8 @@ type StateDB struct {
 
 	// Per-transaction access list
 	accessList *accessList
+
+	logs []*ethtypes.Log
 }
 
 // New creates a new state from a given trie.
@@ -65,6 +67,7 @@ func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm
 		ephemeralStore: NewStateDBStore(keeper.GetTransientKey()),
 
 		txConfig: txConfig,
+		logs:     nil,
 	}
 
 	return statedb
@@ -80,15 +83,14 @@ func (s *StateDB) AddLog(log *ethtypes.Log) {
 	log.TxHash = s.txConfig.TxHash
 	log.BlockHash = s.txConfig.BlockHash
 	log.TxIndex = s.txConfig.TxIndex
-	log.Index = s.txConfig.LogIndex + s.ephemeralStore.GetLogIndex(s.ctx.CurrentCtx())
+	log.Index = s.txConfig.LogIndex + uint(len(s.logs))
 
-	s.ephemeralStore.AddLog(s.ctx.CurrentCtx(), log)
-	s.ephemeralStore.SetLogIndex(s.ctx.CurrentCtx(), log.Index)
+	s.logs = append(s.logs, log)
 }
 
 // Logs returns the logs of current transaction.
 func (s *StateDB) Logs() []*ethtypes.Log {
-	return s.ephemeralStore.GetAllLogs(s.ctx.CurrentCtx())
+	return s.logs
 }
 
 // AddRefund adds gas to the refund counter
@@ -396,7 +398,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	return s.ctx.Snapshot(s.journal.length())
+	return s.ctx.Snapshot(s.journal.length(), len(s.logs))
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
@@ -410,6 +412,9 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 
 	// Revert journal to the latest snapshot's journal index
 	s.journal.Revert(s, currentSnapshot.journalIndex)
+
+	// Revert logs to the latest snapshot's logs index
+	s.logs = s.logs[:currentSnapshot.logsIndex]
 }
 
 // the StateDB object should be discarded after committed.
