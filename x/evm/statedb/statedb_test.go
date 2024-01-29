@@ -141,8 +141,6 @@ func (suite *StateDBTestSuite) TestAccountOverride() {
 }
 
 func (suite *StateDBTestSuite) TestDBError() {
-	suite.T().Skip("Commit() no longer returns error")
-
 	testCases := []struct {
 		name     string
 		malleate func(vm.StateDB)
