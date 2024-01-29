@@ -8,11 +8,8 @@ import (
 )
 
 var (
-	AccessListAddressKey     = []byte{0x01} // common.Address
-	AccessListAddressSlotKey = []byte{0x02} // (common.Address, common.Hash)
-
-	RefundKey   = []byte{0x03}
-	SuicidedKey = []byte{0x04}
+	RefundKey   = []byte{0x01}
+	SuicidedKey = []byte{0x02}
 )
 
 type Store struct {

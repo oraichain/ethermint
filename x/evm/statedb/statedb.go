@@ -50,8 +50,9 @@ type StateDB struct {
 
 	// Per-transaction access list
 	accessList *accessList
+	logs       []*ethtypes.Log
 
-	logs []*ethtypes.Log
+	sdkError error
 }
 
 // New creates a new state from a given trie.
@@ -229,8 +230,9 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	if account == nil {
 		// No account found, create a new one
 		if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *types.NewEmptyAccount()); err != nil {
-			panic(fmt.Errorf("failed to create account: %w", err))
+			s.sdkError = fmt.Errorf("failed to create account: %w", err)
 		}
+
 		return
 	}
 
@@ -243,7 +245,7 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	newAccount.Balance = account.Balance
 
 	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *newAccount); err != nil {
-		panic(fmt.Errorf("failed to create account: %w", err))
+		s.sdkError = fmt.Errorf("failed to create account: %w", err)
 	}
 }
 
@@ -270,7 +272,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 
 	account.Balance = new(big.Int).Add(account.Balance, amount)
 	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		panic(fmt.Errorf("failed to set account for balance addition: %w", err))
+		s.sdkError = fmt.Errorf("failed to set account for balance addition: %w", err)
 	}
 }
 
@@ -284,7 +286,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 
 	account.Balance = new(big.Int).Sub(account.Balance, amount)
 	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		panic(fmt.Errorf("failed to set account for balance subtraction: %w", err))
+		s.sdkError = fmt.Errorf("failed to set account for balance subtraction: %w", err)
 	}
 }
 
@@ -294,7 +296,7 @@ func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
 
 	account.Nonce = nonce
 	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		panic(fmt.Errorf("failed to set account for nonce: %w", err))
+		s.sdkError = fmt.Errorf("failed to set account for nonce: %w", err)
 	}
 }
 
@@ -304,7 +306,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	account.CodeHash = crypto.Keccak256Hash(code).Bytes()
 
 	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		panic(fmt.Errorf("failed to set account for code: %w", err))
+		s.sdkError = fmt.Errorf("failed to set account for code: %w", err)
 	}
 	s.keeper.SetCode(s.ctx.CurrentCtx(), account.CodeHash, code)
 }
@@ -327,7 +329,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 	// Balance cleared, but code and state should still be available until Commit()
 	if err := s.keeper.SetBalance(s.ctx.CurrentCtx(), addr, common.Big0); err != nil {
-		panic(fmt.Errorf("failed to delete suicided account: %w", err))
+		s.sdkError = fmt.Errorf("failed to delete suicided account: %w", err)
 	}
 
 	s.ephemeralStore.SetAccountSuicided(s.ctx.CurrentCtx(), addr)
@@ -419,12 +421,19 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
+	// If there was an error during execution, commit will return error without
+	// persisting any changes to the underlying ctx. Instead of panicking at the
+	// call, we return the error here so it is more visible.
+	if s.sdkError != nil {
+		return s.sdkError
+	}
+
 	// Delete suicided accounts -- these still need to be committed
 	suicidedAddrs := s.ephemeralStore.GetAllSuicided(s.ctx.CurrentCtx())
 	for _, addr := range suicidedAddrs {
 		// Balance is also cleared as part of Keeper.DeleteAccount
 		if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), addr); err != nil {
-			panic(fmt.Errorf("failed to delete suicided account: %w", err))
+			return fmt.Errorf("failed to delete suicided account: %w", err)
 		}
 	}
 
@@ -432,6 +441,5 @@ func (s *StateDB) Commit() error {
 	s.ctx.Commit()
 
 	// Journal only contains non-state content, so nothing to commit.
-
 	return nil
 }
