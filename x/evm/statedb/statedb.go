@@ -37,41 +37,37 @@ var _ vm.StateDB = &StateDB{}
 // * Contracts
 // * Accounts
 type StateDB struct {
-	keeper evm.StateDBKeeper
-
-	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
-	ephemeralStore *EphemeralStore    // store for ephemeral data
-
-	// Journal of state modifications. This is the backbone of
-	// Snapshot and RevertToSnapshot.
-	journal *journal
-
+	keeper   evm.StateDBKeeper
 	txConfig types.TxConfig
 
-	// Per-transaction access list
-	accessList *accessList
-	logs       []*ethtypes.Log
+	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
+	ephemeralStore *EphemeralStore    // in-memory temporary data
 
+	// Journal is currently only used for tracking accessList
+	journal    *journal
+	accessList *accessList
+
+	logs     []*ethtypes.Log
 	sdkError error
 }
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm.StateDB {
-	statedb := &StateDB{
-		keeper: keeper,
+	return &StateDB{
+		keeper:   keeper,
+		txConfig: txConfig,
+
 		// This internally creates a branched ctx so calling Commit() is required
 		// to write state to the incoming ctx.
-		ctx: NewSnapshotCtx(ctx),
+		ctx:            NewSnapshotCtx(ctx),
+		ephemeralStore: NewEphemeralStore(),
 
-		journal:        newJournal(),
-		accessList:     newAccessList(),
-		ephemeralStore: NewStateDBStore(),
+		journal:    newJournal(),
+		accessList: newAccessList(),
 
-		txConfig: txConfig,
 		logs:     nil,
+		sdkError: nil,
 	}
-
-	return statedb
 }
 
 // Keeper returns the underlying `Keeper`
