@@ -152,6 +152,14 @@ func (suite *StateDBTestSuite) TestDBError() {
 			},
 			"failed to set account for balance subtraction: 0aphoton is smaller than 1aphoton",
 		},
+		{
+			"multiple errors persist first error",
+			func(db vm.StateDB) {
+				db.SubBalance(address, big.NewInt(200))
+				db.SubBalance(address2, big.NewInt(500))
+			},
+			"failed to set account for balance subtraction: 0aphoton is smaller than 200aphoton",
+		},
 	}
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
