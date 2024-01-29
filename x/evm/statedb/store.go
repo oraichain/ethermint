@@ -19,8 +19,8 @@ type EphemeralStore struct {
 	suicidedAccountStates []common.Address
 }
 
-// NewStateDBStore creates a new EphemeralStore.
-func NewStateDBStore() *EphemeralStore {
+// NewEphemeralStore creates a new EphemeralStore.
+func NewEphemeralStore() *EphemeralStore {
 	return &EphemeralStore{
 		refundStates:          []uint64{},
 		suicidedAccountStates: []common.Address{},
@@ -28,79 +28,79 @@ func NewStateDBStore() *EphemeralStore {
 }
 
 // GetRevertKey returns the identifier of the current state of the store.
-func (ls *EphemeralStore) GetRevertKey() StoreRevertKey {
+func (es *EphemeralStore) GetRevertKey() StoreRevertKey {
 	return StoreRevertKey{
-		RefundIndex:           len(ls.refundStates),
-		SuicidedAccountsIndex: len(ls.suicidedAccountStates),
+		RefundIndex:           len(es.refundStates),
+		SuicidedAccountsIndex: len(es.suicidedAccountStates),
 	}
 }
 
 // Revert reverts the state to the given key.
-func (ls *EphemeralStore) Revert(key StoreRevertKey) {
-	if key.RefundIndex > len(ls.refundStates) {
+func (es *EphemeralStore) Revert(key StoreRevertKey) {
+	if key.RefundIndex > len(es.refundStates) {
 		panic(fmt.Errorf(
 			"invalid RefundIndex, %d is greater than the length of the refund states (%d)",
-			key.RefundIndex, len(ls.refundStates),
+			key.RefundIndex, len(es.refundStates),
 		))
 	}
 
-	if key.SuicidedAccountsIndex > len(ls.suicidedAccountStates) {
+	if key.SuicidedAccountsIndex > len(es.suicidedAccountStates) {
 		panic(fmt.Errorf(
 			"invalid SuicidedAccountsIndex, %d is greater than the length of the suicided accounts (%d)",
-			key.SuicidedAccountsIndex, len(ls.suicidedAccountStates),
+			key.SuicidedAccountsIndex, len(es.suicidedAccountStates),
 		))
 	}
 
-	ls.refundStates = ls.refundStates[:key.RefundIndex]
-	ls.suicidedAccountStates = ls.suicidedAccountStates[:key.SuicidedAccountsIndex]
+	es.refundStates = es.refundStates[:key.RefundIndex]
+	es.suicidedAccountStates = es.suicidedAccountStates[:key.SuicidedAccountsIndex]
 }
 
 // -----------------------------------------------------------------------------
 // Refund
 
 // GetRefund returns the current refund value, which is the last element.
-func (ls *EphemeralStore) GetRefund() uint64 {
-	if len(ls.refundStates) == 0 {
+func (es *EphemeralStore) GetRefund() uint64 {
+	if len(es.refundStates) == 0 {
 		return 0
 	}
 
-	return ls.refundStates[len(ls.refundStates)-1]
+	return es.refundStates[len(es.refundStates)-1]
 }
 
 // AddRefund adds a refund to the store.
-func (ls *EphemeralStore) AddRefund(gas uint64) {
-	newRefund := ls.GetRefund() + gas
-	ls.refundStates = append(ls.refundStates, newRefund)
+func (es *EphemeralStore) AddRefund(gas uint64) {
+	newRefund := es.GetRefund() + gas
+	es.refundStates = append(es.refundStates, newRefund)
 }
 
 // SubRefund subtracts a refund from the store.
-func (ls *EphemeralStore) SubRefund(gas uint64) {
-	currentRefund := ls.GetRefund()
+func (es *EphemeralStore) SubRefund(gas uint64) {
+	currentRefund := es.GetRefund()
 
 	if currentRefund < gas {
 		panic("current refund is less than gas")
 	}
 
 	newRefund := currentRefund - gas
-	ls.refundStates = append(ls.refundStates, newRefund)
+	es.refundStates = append(es.refundStates, newRefund)
 }
 
 // -----------------------------------------------------------------------------
 // Suicided accounts
 
 // SetAccountSuicided sets the given account as suicided.
-func (ls *EphemeralStore) SetAccountSuicided(addr common.Address) {
+func (es *EphemeralStore) SetAccountSuicided(addr common.Address) {
 	// If already in the list, ignore
-	if ls.GetAccountSuicided(addr) {
+	if es.GetAccountSuicided(addr) {
 		return
 	}
 
-	ls.suicidedAccountStates = append(ls.suicidedAccountStates, addr)
+	es.suicidedAccountStates = append(es.suicidedAccountStates, addr)
 }
 
 // GetAccountSuicided returns true if the given account is suicided.
-func (ls *EphemeralStore) GetAccountSuicided(addr common.Address) bool {
-	for _, a := range ls.suicidedAccountStates {
+func (es *EphemeralStore) GetAccountSuicided(addr common.Address) bool {
+	for _, a := range es.suicidedAccountStates {
 		if a == addr {
 			return true
 		}
@@ -110,6 +110,6 @@ func (ls *EphemeralStore) GetAccountSuicided(addr common.Address) bool {
 }
 
 // GetAllSuicided returns all suicided accounts.
-func (ls *EphemeralStore) GetAllSuicided() []common.Address {
-	return ls.suicidedAccountStates
+func (es *EphemeralStore) GetAllSuicided() []common.Address {
+	return es.suicidedAccountStates
 }
