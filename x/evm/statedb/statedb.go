@@ -329,7 +329,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 
 	// Balance cleared, but code and state should still be available until Commit()
 	if err := s.keeper.SetBalance(s.ctx.CurrentCtx(), addr, common.Big0); err != nil {
-		s.sdkError = fmt.Errorf("failed to delete suicided account: %w", err)
+		s.sdkError = fmt.Errorf("failed to remove suicide account balance: %w", err)
 	}
 
 	s.ephemeralStore.SetAccountSuicided(s.ctx.CurrentCtx(), addr)
