@@ -24,8 +24,7 @@ var (
 	blockHash     common.Hash    = common.BigToHash(big.NewInt(9999))
 	emptyTxConfig types.TxConfig = types.NewEmptyTxConfig(blockHash)
 
-	errAddress    common.Address = common.BigToAddress(big.NewInt(100))
-	emptyCodeHash                = crypto.Keccak256(nil)
+	emptyCodeHash = crypto.Keccak256(nil)
 )
 
 type StateDBTestSuite struct {
@@ -142,22 +141,29 @@ func (suite *StateDBTestSuite) TestAccountOverride() {
 
 func (suite *StateDBTestSuite) TestDBError() {
 	testCases := []struct {
-		name     string
-		malleate func(vm.StateDB)
+		name        string
+		malleate    func(vm.StateDB)
+		errContains string
 	}{
-		{"set account", func(db vm.StateDB) {
-			db.SetNonce(errAddress, 1)
-		}},
-		{"delete account", func(db vm.StateDB) {
-			db.SetNonce(errAddress, 1)
-			suite.Require().True(db.Suicide(errAddress))
-		}},
+		{
+			"negative balance",
+			func(db vm.StateDB) {
+				db.SubBalance(address, big.NewInt(1))
+			},
+			"failed to set account for balance subtraction: 0aphoton is smaller than 1aphoton",
+		},
 	}
 	for _, tc := range testCases {
-		suite.SetupTest()
-		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-		tc.malleate(db)
-		suite.Require().Error(db.Commit())
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+			db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			tc.malleate(db)
+
+			err := db.Commit()
+
+			suite.Require().Error(err)
+			suite.Require().ErrorContains(err, tc.errContains)
+		})
 	}
 }
 
