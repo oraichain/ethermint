@@ -18,7 +18,6 @@ package vm
 import (
 	"math/big"
 
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/evmos/ethermint/x/evm/types"
 
@@ -100,8 +99,6 @@ type StateDBKeeper interface {
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
 	SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error
 	DeleteAccount(ctx sdk.Context, addr common.Address) error
-
-	GetTransientKey() storetypes.StoreKey
 }
 
 type StateDB interface {
