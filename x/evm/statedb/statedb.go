@@ -40,7 +40,7 @@ type StateDB struct {
 	keeper evm.StateDBKeeper
 
 	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
-	ephemeralStore *Store             // store for ephemeral data
+	ephemeralStore *EphemeralStore    // store for ephemeral data
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -65,7 +65,7 @@ func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm
 
 		journal:        newJournal(),
 		accessList:     newAccessList(),
-		ephemeralStore: NewStateDBStore(keeper.GetTransientKey()),
+		ephemeralStore: NewStateDBStore(),
 
 		txConfig: txConfig,
 		logs:     nil,
@@ -96,13 +96,13 @@ func (s *StateDB) Logs() []*ethtypes.Log {
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	s.ephemeralStore.AddRefund(s.ctx.CurrentCtx(), gas)
+	s.ephemeralStore.AddRefund(gas)
 }
 
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
-	s.ephemeralStore.SubRefund(s.ctx.CurrentCtx(), gas)
+	s.ephemeralStore.SubRefund(gas)
 }
 
 // Exist reports whether the given account address exists in the state.
@@ -191,12 +191,12 @@ func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) commo
 
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
-	return s.ephemeralStore.GetRefund(s.ctx.CurrentCtx())
+	return s.ephemeralStore.GetRefund()
 }
 
 // HasSuicided returns if the contract is suicided in current transaction.
 func (s *StateDB) HasSuicided(addr common.Address) bool {
-	return s.ephemeralStore.GetAccountSuicided(s.ctx.CurrentCtx(), addr)
+	return s.ephemeralStore.GetAccountSuicided(addr)
 }
 
 // AddPreimage records a SHA3 preimage seen by the VM.
@@ -332,7 +332,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 		s.SetError(fmt.Errorf("failed to remove suicide account balance: %w", err))
 	}
 
-	s.ephemeralStore.SetAccountSuicided(s.ctx.CurrentCtx(), addr)
+	s.ephemeralStore.SetAccountSuicided(addr)
 
 	return true
 }
@@ -400,7 +400,7 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	return s.ctx.Snapshot(s.journal.length(), len(s.logs))
+	return s.ctx.Snapshot(s.journal.length(), len(s.logs), s.ephemeralStore.GetRevertKey())
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
@@ -414,6 +414,7 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 
 	// Revert journal to the latest snapshot's journal index
 	s.journal.Revert(s, currentSnapshot.journalIndex)
+	s.ephemeralStore.Revert(currentSnapshot.storeRevertKey)
 
 	// Revert logs to the latest snapshot's logs index
 	s.logs = s.logs[:currentSnapshot.logsIndex]
@@ -429,7 +430,7 @@ func (s *StateDB) Commit() error {
 	}
 
 	// Delete suicided accounts -- these still need to be committed
-	suicidedAddrs := s.ephemeralStore.GetAllSuicided(s.ctx.CurrentCtx())
+	suicidedAddrs := s.ephemeralStore.GetAllSuicided()
 	for _, addr := range suicidedAddrs {
 		// Balance is also cleared as part of Keeper.DeleteAccount
 		if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), addr); err != nil {
