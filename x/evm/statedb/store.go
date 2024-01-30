@@ -4,55 +4,94 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
 // StoreRevertKey defines the required information to revert to a previous state.
 type StoreRevertKey struct {
 	RefundIndex           int
 	SuicidedAccountsIndex int
+	LogsIndex             int
 }
 
 // EphemeralStore provides in-memory state of the refund and suicided accounts
 // state with the ability to revert to a previous state.
 type EphemeralStore struct {
-	refundStates          []uint64
-	suicidedAccountStates []common.Address
+	RefundStates          []uint64
+	SuicidedAccountStates []common.Address
+	Logs                  []*ethtypes.Log
 }
 
 // NewEphemeralStore creates a new EphemeralStore.
 func NewEphemeralStore() *EphemeralStore {
 	return &EphemeralStore{
-		refundStates:          []uint64{},
-		suicidedAccountStates: []common.Address{},
+		RefundStates:          nil,
+		SuicidedAccountStates: nil,
+		Logs:                  nil,
 	}
 }
 
 // GetRevertKey returns the identifier of the current state of the store.
 func (es *EphemeralStore) GetRevertKey() StoreRevertKey {
 	return StoreRevertKey{
-		RefundIndex:           len(es.refundStates),
-		SuicidedAccountsIndex: len(es.suicidedAccountStates),
+		RefundIndex:           len(es.RefundStates),
+		SuicidedAccountsIndex: len(es.SuicidedAccountStates),
+		LogsIndex:             len(es.Logs),
 	}
 }
 
 // Revert reverts the state to the given key.
 func (es *EphemeralStore) Revert(key StoreRevertKey) {
-	if key.RefundIndex > len(es.refundStates) {
-		panic(fmt.Errorf(
+	if err := es.ValidateRevertKey(key); err != nil {
+		panic(err)
+	}
+
+	es.RefundStates = es.RefundStates[:key.RefundIndex]
+	es.SuicidedAccountStates = es.SuicidedAccountStates[:key.SuicidedAccountsIndex]
+	es.Logs = es.Logs[:key.LogsIndex]
+}
+
+func (es *EphemeralStore) ValidateRevertKey(key StoreRevertKey) error {
+	if key.RefundIndex > len(es.RefundStates) {
+		return fmt.Errorf(
 			"invalid RefundIndex, %d is greater than the length of the refund states (%d)",
-			key.RefundIndex, len(es.refundStates),
-		))
+			key.RefundIndex, len(es.RefundStates),
+		)
 	}
 
-	if key.SuicidedAccountsIndex > len(es.suicidedAccountStates) {
-		panic(fmt.Errorf(
+	if key.SuicidedAccountsIndex > len(es.SuicidedAccountStates) {
+		return fmt.Errorf(
 			"invalid SuicidedAccountsIndex, %d is greater than the length of the suicided accounts (%d)",
-			key.SuicidedAccountsIndex, len(es.suicidedAccountStates),
-		))
+			key.SuicidedAccountsIndex, len(es.SuicidedAccountStates),
+		)
 	}
 
-	es.refundStates = es.refundStates[:key.RefundIndex]
-	es.suicidedAccountStates = es.suicidedAccountStates[:key.SuicidedAccountsIndex]
+	if key.LogsIndex > len(es.Logs) {
+		return fmt.Errorf(
+			"invalid LogsIndex, %d is greater than the length of the logs (%d)",
+			key.LogsIndex, len(es.Logs),
+		)
+	}
+
+	return nil
+}
+
+// -----------------------------------------------------------------------------
+// Logs
+
+// AddLog adds a log to the store.
+func (es *EphemeralStore) AddLog(log *ethtypes.Log) {
+	es.Logs = append(es.Logs, log)
+}
+
+// GetLogsCount returns the number of logs.
+func (es *EphemeralStore) GetLogsCount() int {
+	return len(es.Logs)
+}
+
+// GetLogs returns all logs.
+func (es *EphemeralStore) GetLogs() []*ethtypes.Log {
+	return es.Logs
 }
 
 // -----------------------------------------------------------------------------
@@ -60,17 +99,17 @@ func (es *EphemeralStore) Revert(key StoreRevertKey) {
 
 // GetRefund returns the current refund value, which is the last element.
 func (es *EphemeralStore) GetRefund() uint64 {
-	if len(es.refundStates) == 0 {
+	if len(es.RefundStates) == 0 {
 		return 0
 	}
 
-	return es.refundStates[len(es.refundStates)-1]
+	return es.RefundStates[len(es.RefundStates)-1]
 }
 
 // AddRefund adds a refund to the store.
 func (es *EphemeralStore) AddRefund(gas uint64) {
 	newRefund := es.GetRefund() + gas
-	es.refundStates = append(es.refundStates, newRefund)
+	es.RefundStates = append(es.RefundStates, newRefund)
 }
 
 // SubRefund subtracts a refund from the store.
@@ -82,7 +121,7 @@ func (es *EphemeralStore) SubRefund(gas uint64) {
 	}
 
 	newRefund := currentRefund - gas
-	es.refundStates = append(es.refundStates, newRefund)
+	es.RefundStates = append(es.RefundStates, newRefund)
 }
 
 // -----------------------------------------------------------------------------
@@ -95,12 +134,12 @@ func (es *EphemeralStore) SetAccountSuicided(addr common.Address) {
 		return
 	}
 
-	es.suicidedAccountStates = append(es.suicidedAccountStates, addr)
+	es.SuicidedAccountStates = append(es.SuicidedAccountStates, addr)
 }
 
 // GetAccountSuicided returns true if the given account is suicided.
 func (es *EphemeralStore) GetAccountSuicided(addr common.Address) bool {
-	for _, a := range es.suicidedAccountStates {
+	for _, a := range es.SuicidedAccountStates {
 		if a == addr {
 			return true
 		}
@@ -111,5 +150,5 @@ func (es *EphemeralStore) GetAccountSuicided(addr common.Address) bool {
 
 // GetAllSuicided returns all suicided accounts.
 func (es *EphemeralStore) GetAllSuicided() []common.Address {
-	return es.suicidedAccountStates
+	return es.SuicidedAccountStates
 }
