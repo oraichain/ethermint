@@ -84,11 +84,6 @@ func (es *EphemeralStore) AddLog(log *ethtypes.Log) {
 	es.Logs = append(es.Logs, log)
 }
 
-// GetLogsCount returns the number of logs.
-func (es *EphemeralStore) GetLogsCount() int {
-	return len(es.Logs)
-}
-
 // GetLogs returns all logs.
 func (es *EphemeralStore) GetLogs() []*ethtypes.Log {
 	return es.Logs

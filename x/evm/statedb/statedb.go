@@ -78,7 +78,7 @@ func (s *StateDB) AddLog(log *ethtypes.Log) {
 	log.TxHash = s.txConfig.TxHash
 	log.BlockHash = s.txConfig.BlockHash
 	log.TxIndex = s.txConfig.TxIndex
-	log.Index = s.txConfig.LogIndex + uint(s.ephemeralStore.GetLogsCount())
+	log.Index = s.txConfig.LogIndex + uint(len(s.ephemeralStore.Logs))
 
 	s.ephemeralStore.AddLog(log)
 }
