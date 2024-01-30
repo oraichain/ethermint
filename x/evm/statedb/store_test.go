@@ -239,7 +239,7 @@ func TestEphemeralStore_GetLogs(t *testing.T) {
 		&ethtypes.Log{Index: 3},
 	}, logs)
 
-	require.Equal(t, len(logs), store.GetLogsCount())
+	require.Equal(t, len(logs), len(store.Logs))
 }
 
 func TestEphemeralStore_AddRefund(t *testing.T) {
