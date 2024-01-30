@@ -26,7 +26,7 @@ func TestSnapshotCommitCtx(t *testing.T) {
 
 	// Make a snapshot
 	previousCtx := snapshotCtx.CurrentCtx()
-	snapshotID := snapshotCtx.Snapshot(0, 0, statedb.StoreRevertKey{})
+	snapshotID := snapshotCtx.Snapshot(0, statedb.StoreRevertKey{})
 	require.Equal(t, 0, snapshotID, "initial snapshot id should be 0")
 	require.NotEqual(t, previousCtx, snapshotCtx.CurrentCtx(), "CurrentCtx should be branched")
 
@@ -52,7 +52,7 @@ func TestRevert(t *testing.T) {
 	snapshotCtx := statedb.NewSnapshotCtx(initialCtx)
 
 	// Make a snapshot
-	snapshotID := snapshotCtx.Snapshot(0, 0, statedb.StoreRevertKey{0, 0})
+	snapshotID := snapshotCtx.Snapshot(0, statedb.StoreRevertKey{})
 
 	// Revert to the snapshot
 	snapshotCtx.Revert(snapshotID)
