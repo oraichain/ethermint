@@ -11,6 +11,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/testutil"
+	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
@@ -37,22 +38,23 @@ func NewTestContext() sdk.Context {
 func benchmarkNestedSnapshot(b *testing.B, layers int) {
 	suite := GetTestSuite(b)
 
-	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-
-	for i := 0; i < layers; i++ {
-		db.Snapshot()
-
-		key := common.BigToHash(big.NewInt(int64(i)))
-		value := common.BigToHash(big.NewInt(int64(i + 1)))
-		db.SetState(address, key, value)
-	}
-
-	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
-		db.ForEachStorage(address, func(k, v common.Hash) bool {
-			return true
-		})
+		b.StopTimer()
+		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+
+		// Create layers of nested snapshots
+		for i := 0; i < layers; i++ {
+			db.Snapshot()
+
+			// Some state change each snapshot
+			key := common.BigToHash(big.NewInt(int64(i + 1)))
+			value := common.BigToHash(big.NewInt(int64(i + 1)))
+			db.SetState(address, key, value)
+		}
+
+		b.StartTimer()
+
+		require.NoError(b, db.Commit())
 	}
 }
 
@@ -64,12 +66,20 @@ func BenchmarkNestedSnapshot4(b *testing.B) {
 	benchmarkNestedSnapshot(b, 4)
 }
 
-func BenchmarkNestedSnapshot8(b *testing.B) {
-	benchmarkNestedSnapshot(b, 8)
+func BenchmarkNestedSnapshot10(b *testing.B) {
+	benchmarkNestedSnapshot(b, 10)
 }
 
-func BenchmarkNestedSnapshot16(b *testing.B) {
-	benchmarkNestedSnapshot(b, 16)
+func BenchmarkNestedSnapshot100(b *testing.B) {
+	benchmarkNestedSnapshot(b, 100)
+}
+
+func BenchmarkNestedSnapshot1000(b *testing.B) {
+	benchmarkNestedSnapshot(b, 1000)
+}
+
+func BenchmarkNestedSnapshot10000(b *testing.B) {
+	benchmarkNestedSnapshot(b, 10000)
 }
 
 func BenchmarkAddBalance(b *testing.B) {
