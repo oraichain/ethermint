@@ -1,6 +1,7 @@
 package statedb_test
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -35,51 +36,33 @@ func NewTestContext() sdk.Context {
 	return sdk.NewContext(cms, tmproto.Header{}, false, log.NewNopLogger())
 }
 
-func benchmarkNestedSnapshot(b *testing.B, layers int) {
-	suite := GetTestSuite(b)
+func BenchmarkNestedSnapshot(b *testing.B) {
+	benches := []int{1, 4, 10, 100, 1000, 10000}
 
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	for _, layers := range benches {
+		b.Run(fmt.Sprintf("%d layers", layers), func(b *testing.B) {
+			suite := GetTestSuite(b)
 
-		// Create layers of nested snapshots
-		for i := 0; i < layers; i++ {
-			db.Snapshot()
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 
-			// Some state change each snapshot
-			key := common.BigToHash(big.NewInt(int64(i + 1)))
-			value := common.BigToHash(big.NewInt(int64(i + 1)))
-			db.SetState(address, key, value)
-		}
+				// Create layers of nested snapshots
+				for i := 0; i < layers; i++ {
+					db.Snapshot()
 
-		b.StartTimer()
+					// Some state change each snapshot
+					key := common.BigToHash(big.NewInt(int64(i + 1)))
+					value := common.BigToHash(big.NewInt(int64(i + 1)))
+					db.SetState(address, key, value)
+				}
 
-		require.NoError(b, db.Commit())
+				b.StartTimer()
+
+				require.NoError(b, db.Commit())
+			}
+		})
 	}
-}
-
-func BenchmarkNestedSnapshot1(b *testing.B) {
-	benchmarkNestedSnapshot(b, 1)
-}
-
-func BenchmarkNestedSnapshot4(b *testing.B) {
-	benchmarkNestedSnapshot(b, 4)
-}
-
-func BenchmarkNestedSnapshot10(b *testing.B) {
-	benchmarkNestedSnapshot(b, 10)
-}
-
-func BenchmarkNestedSnapshot100(b *testing.B) {
-	benchmarkNestedSnapshot(b, 100)
-}
-
-func BenchmarkNestedSnapshot1000(b *testing.B) {
-	benchmarkNestedSnapshot(b, 1000)
-}
-
-func BenchmarkNestedSnapshot10000(b *testing.B) {
-	benchmarkNestedSnapshot(b, 10000)
 }
 
 func BenchmarkAddBalance(b *testing.B) {
@@ -175,39 +158,29 @@ func BenchmarkAddLog(b *testing.B) {
 	}
 }
 
-func benchmarkGetLogs(b *testing.B, logEntries int) {
-	suite := GetTestSuite(b)
-	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+func BenchmarkGetLogs(b *testing.B) {
+	benches := []int{1, 4, 64, 512, 1024}
 
-	for i := 0; i < logEntries; i++ {
-		log := &ethtypes.Log{
-			Address: address,
-			Topics:  []common.Hash{common.BigToHash(big.NewInt(int64(i)))},
-		}
-		db.AddLog(log)
+	for _, entries := range benches {
+		b.Run(fmt.Sprintf("%d entries", entries), func(b *testing.B) {
+			suite := GetTestSuite(b)
+			db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+
+			for i := 0; i < entries; i++ {
+				log := &ethtypes.Log{
+					Address: address,
+					Topics:  []common.Hash{common.BigToHash(big.NewInt(int64(i)))},
+				}
+				db.AddLog(log)
+			}
+
+			b.ResetTimer()
+
+			for i := 0; i < b.N; i++ {
+				db.Logs()
+			}
+		})
 	}
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		db.Logs()
-	}
-}
-
-func BenchmarkGetLogs1(b *testing.B) {
-	benchmarkGetLogs(b, 1)
-}
-
-func BenchmarkGetLogs8(b *testing.B) {
-	benchmarkGetLogs(b, 8)
-}
-
-func BenchmarkGetLogs64(b *testing.B) {
-	benchmarkGetLogs(b, 64)
-}
-
-func BenchmarkGetLogs512(b *testing.B) {
-	benchmarkGetLogs(b, 512)
 }
 
 func GetTestSuite(b *testing.B) *testutil.KeeperTestSuite {
