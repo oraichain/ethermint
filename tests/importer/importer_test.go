@@ -18,6 +18,8 @@ import (
 
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	evmtypes "github.com/evmos/ethermint/x/evm/types"
+	"github.com/evmos/ethermint/x/evm/vm"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
@@ -140,7 +142,7 @@ func (suite *ImporterTestSuite) TestImportBlocks() {
 		})
 		ctx := suite.app.NewContext(false, tmheader)
 		ctx = ctx.WithBlockHeight(tmheader.Height)
-		vmdb := statedb.New(ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes())))
+		vmdb := statedb.New(ctx, suite.app.EvmKeeper, evmtypes.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes())))
 
 		if chainConfig.DAOForkSupport && chainConfig.DAOForkBlock != nil && chainConfig.DAOForkBlock.Cmp(block.Number()) == 0 {
 			applyDAOHardFork(vmdb)
@@ -226,7 +228,7 @@ func applyDAOHardFork(vmdb ethvm.StateDB) {
 // Ref: https://github.com/ethereum/go-ethereum/blob/52f2461774bcb8cdd310f86b4bc501df5b783852/core/state_processor.go#L88
 func applyTransaction(
 	ctx sdk.Context, config *ethparams.ChainConfig, bc ethcore.ChainContext, author *common.Address,
-	gp *ethcore.GasPool, evmKeeper *evmkeeper.Keeper, vmdb *statedb.StateDB, header *ethtypes.Header,
+	gp *ethcore.GasPool, evmKeeper *evmkeeper.Keeper, vmdb vm.StateDB, header *ethtypes.Header,
 	tx *ethtypes.Transaction, usedGas *uint64, cfg ethvm.Config,
 ) (*ethtypes.Receipt, uint64, error) {
 	msg, err := tx.AsMessage(ethtypes.MakeSigner(config, header.Number), sdk.ZeroInt().BigInt())
