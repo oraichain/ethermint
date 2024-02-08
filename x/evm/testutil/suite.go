@@ -1,7 +1,6 @@
 package testutil
 
 import (
-	_ "embed"
 	"encoding/json"
 	"math"
 	"math/big"
@@ -31,7 +30,6 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
-	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	"github.com/evmos/ethermint/x/evm/vm"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,8 +44,6 @@ import (
 	tmversion "github.com/cometbft/cometbft/proto/tendermint/version"
 	"github.com/cometbft/cometbft/version"
 )
-
-var testTokens = sdkmath.NewIntWithDecimal(1000, 18)
 
 type TestSuite struct {
 	suite.Suite
@@ -206,7 +202,7 @@ func (suite *TestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	suite.ClientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.EthSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
 	suite.AppCodec = encodingConfig.Codec
-	suite.Denom = evmtypes.DefaultEVMDenom
+	suite.Denom = types.DefaultEVMDenom
 }
 
 func (suite *TestSuite) EvmDenom() string {
@@ -219,7 +215,7 @@ func (suite *TestSuite) EvmDenom() string {
 func (suite *TestSuite) Commit() {
 	_ = suite.App.Commit()
 	header := suite.Ctx.BlockHeader()
-	header.Height += 1
+	header.Height++
 	suite.App.BeginBlock(abci.RequestBeginBlock{
 		Header: header,
 	})
@@ -250,7 +246,8 @@ func (suite *TestSuite) DeployTestContract(t require.TestingT, owner common.Addr
 
 	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
 
-	data := append(types.ERC20Contract.Bin, ctorArgs...)
+	data := types.ERC20Contract.Bin
+	data = append(data, ctorArgs...)
 	args, err := json.Marshal(&types.TransactionArgs{
 		From: &suite.Address,
 		Data: (*hexutil.Bytes)(&data),
@@ -258,7 +255,7 @@ func (suite *TestSuite) DeployTestContract(t require.TestingT, owner common.Addr
 	require.NoError(t, err)
 	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
-		GasCap:          uint64(config.DefaultGasCap),
+		GasCap:          config.DefaultGasCap,
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
 	})
 	require.NoError(t, err)
@@ -366,7 +363,7 @@ func (suite *TestSuite) DeployTestMessageCall(t require.TestingT) common.Address
 
 	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
-		GasCap:          uint64(config.DefaultGasCap),
+		GasCap:          config.DefaultGasCap,
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
 	})
 	require.NoError(t, err)
