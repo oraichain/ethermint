@@ -183,9 +183,9 @@ func BenchmarkGetLogs(b *testing.B) {
 	}
 }
 
-func GetTestSuite(b *testing.B) *testutil.KeeperTestSuite {
+func GetTestSuite(b *testing.B) *testutil.TestSuite {
 	// Just reuse the keeper test suite to setup and create a testing app
-	suite := testutil.KeeperTestSuite{}
+	suite := testutil.TestSuite{}
 	suite.SetupTestWithT(b)
 
 	return &suite
@@ -193,7 +193,7 @@ func GetTestSuite(b *testing.B) *testutil.KeeperTestSuite {
 
 func GetTestKeeper() *keeper.Keeper {
 	// Just reuse the keeper test suite to setup and create a keeper
-	suite := testutil.KeeperTestSuite{}
+	suite := testutil.TestSuite{}
 	suite.SetupTest()
 
 	return suite.App.EvmKeeper

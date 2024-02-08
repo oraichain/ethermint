@@ -158,7 +158,7 @@ func newNativeMessage(
 
 func BenchmarkApplyTransaction(b *testing.B) {
 	suite := KeeperTestSuite{
-		KeeperTestSuite: testutil.KeeperTestSuite{
+		TestSuite: testutil.TestSuite{
 			EnableLondonHF: true,
 		},
 	}
@@ -189,7 +189,7 @@ func BenchmarkApplyTransaction(b *testing.B) {
 
 func BenchmarkApplyTransactionWithLegacyTx(b *testing.B) {
 	suite := KeeperTestSuite{
-		KeeperTestSuite: testutil.KeeperTestSuite{
+		TestSuite: testutil.TestSuite{
 			EnableLondonHF: true,
 		},
 	}
@@ -220,7 +220,7 @@ func BenchmarkApplyTransactionWithLegacyTx(b *testing.B) {
 
 func BenchmarkApplyTransactionWithDynamicFeeTx(b *testing.B) {
 	suite := KeeperTestSuite{
-		KeeperTestSuite: testutil.KeeperTestSuite{
+		TestSuite: testutil.TestSuite{
 			EnableFeemarket: true,
 			EnableLondonHF:  true,
 		},
@@ -252,7 +252,7 @@ func BenchmarkApplyTransactionWithDynamicFeeTx(b *testing.B) {
 
 func BenchmarkApplyMessage(b *testing.B) {
 	suite := KeeperTestSuite{
-		KeeperTestSuite: testutil.KeeperTestSuite{
+		TestSuite: testutil.TestSuite{
 			EnableLondonHF: true,
 		},
 	}
@@ -291,7 +291,7 @@ func BenchmarkApplyMessage(b *testing.B) {
 
 func BenchmarkApplyMessageWithLegacyTx(b *testing.B) {
 	suite := KeeperTestSuite{
-		KeeperTestSuite: testutil.KeeperTestSuite{
+		TestSuite: testutil.TestSuite{
 			EnableLondonHF: true,
 		},
 	}
@@ -330,7 +330,7 @@ func BenchmarkApplyMessageWithLegacyTx(b *testing.B) {
 
 func BenchmarkApplyMessageWithDynamicFeeTx(b *testing.B) {
 	suite := KeeperTestSuite{
-		KeeperTestSuite: testutil.KeeperTestSuite{
+		TestSuite: testutil.TestSuite{
 			EnableFeemarket: true,
 			EnableLondonHF:  true,
 		},
