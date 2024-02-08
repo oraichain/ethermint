@@ -88,21 +88,12 @@ func TestNewEphemeralStore_GetRevertKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			store := statedb.NewEphemeralStore()
 
-			store.AddLog(&ethtypes.Log{})
-			store.AddRefund(1)
-			store.SetAccountSuicided(address)
+			tt.maleate(store)
 
 			key := store.GetRevertKey()
-			expected := statedb.StoreRevertKey{
-				RefundIndex:           1,
-				SuicidedAccountsIndex: 1,
-				LogsIndex:             1,
-			}
-
-			require.Equal(t, expected, key)
+			require.Equal(t, tt.expected, key)
 		})
 	}
 }
