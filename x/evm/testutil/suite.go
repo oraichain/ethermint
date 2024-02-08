@@ -11,17 +11,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
+	"cosmossdk.io/simapp"
+	tmjson "github.com/cometbft/cometbft/libs/json"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
-	"github.com/cosmos/cosmos-sdk/simapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
-	tmjson "github.com/tendermint/tendermint/libs/json"
 
 	"github.com/evmos/ethermint/app"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
@@ -40,11 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/crypto/tmhash"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmversion "github.com/tendermint/tendermint/proto/tendermint/version"
-	"github.com/tendermint/tendermint/version"
+	abci "github.com/cometbft/cometbft/abci/types"
+	"github.com/cometbft/cometbft/crypto/tmhash"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
+	tmversion "github.com/cometbft/cometbft/proto/tendermint/version"
+	"github.com/cometbft/cometbft/version"
 )
 
 var testTokens = sdkmath.NewIntWithDecimal(1000, 18)
@@ -62,13 +62,13 @@ type KeeperTestSuite struct {
 	ClientCtx client.Context
 	EthSigner ethtypes.Signer
 
-	appCodec codec.Codec
-	signer   keyring.Signer
+	AppCodec codec.Codec
+	Signer   keyring.Signer
 
-	enableFeemarket  bool
-	enableLondonHF   bool
-	mintFeeCollector bool
-	denom            string
+	EnableFeemarket  bool
+	EnableLondonHF   bool
+	MintFeeCollector bool
+	Denom            string
 }
 
 func (suite *KeeperTestSuite) SetupTest() {
@@ -96,7 +96,7 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 		Key: crypto.FromECDSA(ecdsaPriv),
 	}
 	suite.Address = common.BytesToAddress(priv.PubKey().Address().Bytes())
-	suite.signer = tests.NewSigner(priv)
+	suite.Signer = tests.NewSigner(priv)
 
 	// consensus key
 	priv, err = ethsecp256k1.GenerateKey()
@@ -105,14 +105,14 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 
 	suite.App = app.Setup(checkTx, func(app *app.EthermintApp, genesis simapp.GenesisState) simapp.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
-		if suite.enableFeemarket {
+		if suite.EnableFeemarket {
 			feemarketGenesis.Params.EnableHeight = 1
 			feemarketGenesis.Params.NoBaseFee = false
 		} else {
 			feemarketGenesis.Params.NoBaseFee = true
 		}
 		genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
-		if !suite.enableLondonHF {
+		if !suite.EnableLondonHF {
 			evmGenesis := types.DefaultGenesisState()
 			maxInt := sdkmath.NewInt(math.MaxInt64)
 			evmGenesis.Params.ChainConfig.LondonBlock = &maxInt
@@ -126,7 +126,7 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 		return genesis
 	})
 
-	if suite.mintFeeCollector {
+	if suite.MintFeeCollector {
 		// mint some coin to fee collector
 		coins := sdk.NewCoins(sdk.NewCoin(types.DefaultEVMDenom, sdkmath.NewInt(int64(params.TxGas)-1)))
 		genesisState := app.NewTestGenesisState(suite.App.AppCodec())
@@ -205,8 +205,8 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	encodingConfig := encoding.MakeConfig(app.ModuleBasics)
 	suite.ClientCtx = client.Context{}.WithTxConfig(encodingConfig.TxConfig)
 	suite.EthSigner = ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID())
-	suite.appCodec = encodingConfig.Codec
-	suite.denom = evmtypes.DefaultEVMDenom
+	suite.AppCodec = encodingConfig.Codec
+	suite.Denom = evmtypes.DefaultEVMDenom
 }
 
 func (suite *KeeperTestSuite) EvmDenom() string {
@@ -264,7 +264,7 @@ func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner commo
 	require.NoError(t, err)
 
 	var erc20DeployTx *types.MsgEthereumTx
-	if suite.enableFeemarket {
+	if suite.EnableFeemarket {
 		erc20DeployTx = types.NewTxContract(
 			chainID,
 			nonce,
@@ -290,7 +290,7 @@ func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner commo
 	}
 
 	erc20DeployTx.From = suite.Address.Hex()
-	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
+	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
 	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, erc20DeployTx)
 	require.NoError(t, err)
@@ -316,7 +316,7 @@ func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAdd
 	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
 
 	var ercTransferTx *types.MsgEthereumTx
-	if suite.enableFeemarket {
+	if suite.EnableFeemarket {
 		ercTransferTx = types.NewTx(
 			chainID,
 			nonce,
@@ -344,7 +344,7 @@ func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAdd
 	}
 
 	ercTransferTx.From = suite.Address.Hex()
-	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
+	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
 	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, ercTransferTx)
 	require.NoError(t, err)
@@ -374,7 +374,7 @@ func (suite *KeeperTestSuite) DeployTestMessageCall(t require.TestingT) common.A
 	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
 
 	var erc20DeployTx *types.MsgEthereumTx
-	if suite.enableFeemarket {
+	if suite.EnableFeemarket {
 		erc20DeployTx = types.NewTxContract(
 			chainID,
 			nonce,
@@ -400,7 +400,7 @@ func (suite *KeeperTestSuite) DeployTestMessageCall(t require.TestingT) common.A
 	}
 
 	erc20DeployTx.From = suite.Address.Hex()
-	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
+	err = erc20DeployTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	require.NoError(t, err)
 	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, erc20DeployTx)
 	require.NoError(t, err)
