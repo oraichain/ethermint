@@ -24,7 +24,7 @@ import (
 var testTokens = sdkmath.NewIntWithDecimal(1000, 18)
 
 type KeeperTestSuite struct {
-	testutil.KeeperTestSuite
+	testutil.TestSuite
 }
 
 var s *KeeperTestSuite

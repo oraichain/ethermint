@@ -49,7 +49,7 @@ import (
 
 var testTokens = sdkmath.NewIntWithDecimal(1000, 18)
 
-type KeeperTestSuite struct {
+type TestSuite struct {
 	suite.Suite
 
 	Ctx         sdk.Context
@@ -71,24 +71,24 @@ type KeeperTestSuite struct {
 	Denom            string
 }
 
-func (suite *KeeperTestSuite) SetupTest() {
+func (suite *TestSuite) SetupTest() {
 	checkTx := false
 	suite.App = app.Setup(checkTx, nil)
 	suite.SetupApp(checkTx)
 }
 
-func (suite *KeeperTestSuite) SetupTestWithT(t require.TestingT) {
+func (suite *TestSuite) SetupTestWithT(t require.TestingT) {
 	checkTx := false
 	suite.App = app.Setup(checkTx, nil)
 	suite.SetupAppWithT(checkTx, t)
 }
 
-func (suite *KeeperTestSuite) SetupApp(checkTx bool) {
+func (suite *TestSuite) SetupApp(checkTx bool) {
 	suite.SetupAppWithT(checkTx, suite.T())
 }
 
 // SetupApp setup test environment, it uses`require.TestingT` to support both `testing.T` and `testing.B`.
-func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
+func (suite *TestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	// account key, use a constant account to keep unit test deterministic.
 	ecdsaPriv, err := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	require.NoError(t, err)
@@ -209,14 +209,14 @@ func (suite *KeeperTestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	suite.Denom = evmtypes.DefaultEVMDenom
 }
 
-func (suite *KeeperTestSuite) EvmDenom() string {
+func (suite *TestSuite) EvmDenom() string {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	rsp, _ := suite.QueryClient.Params(ctx, &types.QueryParamsRequest{})
 	return rsp.Params.EvmDenom
 }
 
 // Commit and begin new block
-func (suite *KeeperTestSuite) Commit() {
+func (suite *TestSuite) Commit() {
 	_ = suite.App.Commit()
 	header := suite.Ctx.BlockHeader()
 	header.Height += 1
@@ -232,7 +232,7 @@ func (suite *KeeperTestSuite) Commit() {
 	suite.QueryClient = types.NewQueryClient(queryHelper)
 }
 
-func (suite *KeeperTestSuite) StateDB() vm.StateDB {
+func (suite *TestSuite) StateDB() vm.StateDB {
 	return statedb.New(
 		suite.Ctx,
 		suite.App.EvmKeeper,
@@ -241,7 +241,7 @@ func (suite *KeeperTestSuite) StateDB() vm.StateDB {
 }
 
 // DeployTestContract deploy a test erc20 contract and returns the contract address
-func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner common.Address, supply *big.Int) common.Address {
+func (suite *TestSuite) DeployTestContract(t require.TestingT, owner common.Address, supply *big.Int) common.Address {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
 
@@ -298,7 +298,7 @@ func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner commo
 	return crypto.CreateAddress(suite.Address, nonce)
 }
 
-func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAddr, from, to common.Address, amount *big.Int) *types.MsgEthereumTx {
+func (suite *TestSuite) TransferERC20Token(t require.TestingT, contractAddr, from, to common.Address, amount *big.Int) *types.MsgEthereumTx {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
 
@@ -353,7 +353,7 @@ func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAdd
 }
 
 // DeployTestMessageCall deploy a test erc20 contract and returns the contract address
-func (suite *KeeperTestSuite) DeployTestMessageCall(t require.TestingT) common.Address {
+func (suite *TestSuite) DeployTestMessageCall(t require.TestingT) common.Address {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
 
@@ -408,7 +408,7 @@ func (suite *KeeperTestSuite) DeployTestMessageCall(t require.TestingT) common.A
 	return crypto.CreateAddress(suite.Address, nonce)
 }
 
-func (suite *KeeperTestSuite) GetAllAccountStorage(
+func (suite *TestSuite) GetAllAccountStorage(
 	ctx sdk.Context,
 	addr common.Address,
 ) map[common.Hash]common.Hash {

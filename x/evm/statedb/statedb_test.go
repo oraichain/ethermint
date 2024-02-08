@@ -28,7 +28,7 @@ var (
 )
 
 type StateDBTestSuite struct {
-	testutil.KeeperTestSuite
+	testutil.TestSuite
 }
 
 func (suite *StateDBTestSuite) TestAccount() {
