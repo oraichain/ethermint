@@ -12,6 +12,7 @@ import (
 	sdkmath "cosmossdk.io/math"
 
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/testutil"
 	"github.com/stretchr/testify/suite"
 
@@ -119,7 +120,7 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 }
 
 func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
-	empty := types.StateDBAccount{
+	empty := statedb.Account{
 		Balance:  new(big.Int),
 		CodeHash: types.EmptyCodeHash,
 	}

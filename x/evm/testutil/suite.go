@@ -30,7 +30,6 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
-	"github.com/evmos/ethermint/x/evm/vm"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -228,11 +227,11 @@ func (suite *TestSuite) Commit() {
 	suite.QueryClient = types.NewQueryClient(queryHelper)
 }
 
-func (suite *TestSuite) StateDB() vm.StateDB {
+func (suite *TestSuite) StateDB() *statedb.StateDB {
 	return statedb.New(
 		suite.Ctx,
 		suite.App.EvmKeeper,
-		types.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes())),
+		statedb.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes())),
 	)
 }
 

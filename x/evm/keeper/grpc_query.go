@@ -255,7 +255,7 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	txConfig := types.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
+	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash()))
 
 	// pass false to not commit StateDB
 	res, err := k.ApplyMessageWithConfig(ctx, msg, nil, false, cfg, txConfig)
@@ -324,7 +324,7 @@ func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*type
 	nonce := k.GetNonce(ctx, args.GetFrom())
 	args.Nonce = (*hexutil.Uint64)(&nonce)
 
-	txConfig := types.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
+	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
 
 	// convert the tx args to an ethereum message
 	msg, err := args.ToMessage(req.GasCap, cfg.BaseFee)
@@ -423,7 +423,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	}
 	signer := ethtypes.MakeSigner(cfg.ChainConfig, big.NewInt(ctx.BlockHeight()))
 
-	txConfig := types.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
+	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
 	for i, tx := range req.Predecessors {
 		ethTx := tx.AsTransaction()
 		msg, err := ethTx.AsMessage(signer, cfg.BaseFee)
@@ -503,7 +503,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 	txsLength := len(req.Txs)
 	results := make([]*types.TxTraceResult, 0, txsLength)
 
-	txConfig := types.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
+	txConfig := statedb.NewEmptyTxConfig(common.BytesToHash(ctx.HeaderHash().Bytes()))
 	for i, tx := range req.Txs {
 		result := types.TxTraceResult{}
 		ethTx := tx.AsTransaction()
@@ -533,7 +533,7 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 func (k *Keeper) traceTx(
 	ctx sdk.Context,
 	cfg *statedb.EVMConfig,
-	txConfig types.TxConfig,
+	txConfig statedb.TxConfig,
 	signer ethtypes.Signer,
 	tx *ethtypes.Transaction,
 	traceConfig *types.TraceConfig,

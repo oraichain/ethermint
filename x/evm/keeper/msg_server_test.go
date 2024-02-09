@@ -8,8 +8,8 @@ import (
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
-	"github.com/evmos/ethermint/x/evm/vm"
 )
 
 func (suite *KeeperTestSuite) TestEthereumTx() {
@@ -17,7 +17,7 @@ func (suite *KeeperTestSuite) TestEthereumTx() {
 		err             error
 		msg             *types.MsgEthereumTx
 		signer          ethtypes.Signer
-		vmdb            vm.StateDB
+		vmdb            *statedb.StateDB
 		chainCfg        *params.ChainConfig
 		expectedGasUsed uint64
 	)

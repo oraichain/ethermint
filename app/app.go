@@ -123,7 +123,6 @@ import (
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm"
 	evmkeeper "github.com/evmos/ethermint/x/evm/keeper"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
 	legacyevmtypes "github.com/evmos/ethermint/x/evm/types/legacy"
 	"github.com/evmos/ethermint/x/evm/vm/geth"
@@ -423,7 +422,7 @@ func NewEthermintApp(
 		appCodec, keys[evmtypes.StoreKey], tkeys[evmtypes.TransientKey],
 		authtypes.NewModuleAddress(govtypes.ModuleName),
 		app.AccountKeeper, app.BankKeeper, app.StakingKeeper, app.FeeMarketKeeper,
-		nil, geth.NewEVM, statedb.New, tracer, evmSs,
+		nil, geth.NewEVM, tracer, evmSs,
 	)
 
 	// Create IBC Keeper

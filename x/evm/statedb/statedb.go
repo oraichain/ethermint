@@ -25,8 +25,6 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/x/evm/types"
-	evm "github.com/evmos/ethermint/x/evm/vm"
 )
 
 var _ vm.StateDB = &StateDB{}
@@ -37,8 +35,8 @@ var _ vm.StateDB = &StateDB{}
 // * Contracts
 // * Accounts
 type StateDB struct {
-	keeper   evm.StateDBKeeper
-	txConfig types.TxConfig
+	keeper   Keeper
+	txConfig TxConfig
 
 	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
 	ephemeralStore *EphemeralStore    // in-memory temporary data
@@ -51,7 +49,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm.StateDB {
+func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 	return &StateDB{
 		keeper:   keeper,
 		txConfig: txConfig,
@@ -69,7 +67,7 @@ func New(ctx sdk.Context, keeper evm.StateDBKeeper, txConfig types.TxConfig) evm
 }
 
 // Keeper returns the underlying `Keeper`
-func (s *StateDB) Keeper() evm.StateDBKeeper {
+func (s *StateDB) Keeper() Keeper {
 	return s.keeper
 }
 
@@ -200,10 +198,10 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {} //nolint: revive
 
 // getOrNewAccount retrieves a state account or create a new account if nil.
-func (s *StateDB) getOrNewAccount(addr common.Address) *types.StateDBAccount {
+func (s *StateDB) getOrNewAccount(addr common.Address) *Account {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
-		account = types.NewEmptyAccount()
+		account = NewEmptyAccount()
 	}
 
 	return account
@@ -223,7 +221,7 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
 		// No account found, create a new one
-		if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *types.NewEmptyAccount()); err != nil {
+		if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *NewEmptyAccount()); err != nil {
 			s.SetError(fmt.Errorf("failed to create account: %w", err))
 		}
 
@@ -235,7 +233,7 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 
 	// Create a new account -- Must use NewEmptyAccount() so that the
 	// CodeHash is the actual hash of nil, not an empty byte slice
-	newAccount := types.NewEmptyAccount()
+	newAccount := NewEmptyAccount()
 	newAccount.Balance = account.Balance
 
 	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *newAccount); err != nil {

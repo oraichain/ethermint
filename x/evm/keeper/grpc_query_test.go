@@ -9,7 +9,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	ethlogger "github.com/ethereum/go-ethereum/eth/tracers/logger"
 	ethparams "github.com/ethereum/go-ethereum/params"
@@ -238,12 +237,12 @@ func (suite *KeeperTestSuite) TestQueryStorage() {
 
 	testCases := []struct {
 		msg      string
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 		expPass  bool
 	}{
 		{
 			"invalid address",
-			func(vm.StateDB) {
+			func(*statedb.StateDB) {
 				req = &types.QueryStorageRequest{
 					Address: invalidAddress,
 				}
@@ -252,7 +251,7 @@ func (suite *KeeperTestSuite) TestQueryStorage() {
 		},
 		{
 			"success",
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				key := common.BytesToHash([]byte("key"))
 				value := common.BytesToHash([]byte("value"))
 				expValue = value.String()
@@ -297,12 +296,12 @@ func (suite *KeeperTestSuite) TestQueryCode() {
 
 	testCases := []struct {
 		msg      string
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 		expPass  bool
 	}{
 		{
 			"invalid address",
-			func(vm.StateDB) {
+			func(*statedb.StateDB) {
 				req = &types.QueryCodeRequest{
 					Address: invalidAddress,
 				}
@@ -313,7 +312,7 @@ func (suite *KeeperTestSuite) TestQueryCode() {
 		},
 		{
 			"success",
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				expCode = []byte("code")
 				vmdb.SetCode(suite.Address, expCode)
 
@@ -356,17 +355,17 @@ func (suite *KeeperTestSuite) TestQueryTxLogs() {
 
 	testCases := []struct {
 		msg      string
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 	}{
 		{
 			"empty logs",
-			func(vm.StateDB) {
+			func(*statedb.StateDB) {
 				expLogs = nil
 			},
 		},
 		{
 			"success",
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				expLogs = []*types.Log{
 					{
 						Address:     suite.Address.String(),
@@ -392,7 +391,7 @@ func (suite *KeeperTestSuite) TestQueryTxLogs() {
 		suite.Run(fmt.Sprintf("Case %s", tc.msg), func() {
 			suite.SetupTest() // reset
 
-			vmdb := statedb.New(suite.Ctx, suite.App.EvmKeeper, types.NewTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes()), txHash, txIndex, logIndex))
+			vmdb := statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes()), txHash, txIndex, logIndex))
 			tc.malleate(vmdb)
 			suite.Require().NoError(vmdb.Commit())
 
