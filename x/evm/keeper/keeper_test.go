@@ -37,7 +37,6 @@ import (
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
-	"github.com/evmos/ethermint/x/evm/vm"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -253,12 +252,8 @@ func (suite *KeeperTestSuite) Commit() {
 	suite.queryClient = types.NewQueryClient(queryHelper)
 }
 
-func (suite *KeeperTestSuite) StateDB() vm.StateDB {
-	return statedb.New(
-		suite.ctx,
-		suite.app.EvmKeeper,
-		types.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash().Bytes())),
-	)
+func (suite *KeeperTestSuite) StateDB() *statedb.StateDB {
+	return statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash().Bytes())))
 }
 
 // DeployTestContract deploy a test erc20 contract and returns the contract address
@@ -503,7 +498,7 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 }
 
 func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
-	empty := types.StateDBAccount{
+	empty := statedb.Account{
 		Balance:  new(big.Int),
 		CodeHash: types.EmptyCodeHash,
 	}

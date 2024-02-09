@@ -233,55 +233,55 @@ func (suite *KeeperTestSuite) TestSetAccount() {
 	testCases := []struct {
 		name        string
 		address     common.Address
-		account     types.StateDBAccount
+		account     statedb.Account
 		expectedErr error
 	}{
 		{
 			"new account, non-contract account",
 			tests.GenerateAddress(),
-			types.StateDBAccount{10, big.NewInt(100), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(100), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"new account, contract account",
 			tests.GenerateAddress(),
-			types.StateDBAccount{10, big.NewInt(100), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(100), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			nil,
 		},
 		{
 			"existing eth account, non-contract account",
 			ethAddr,
-			types.StateDBAccount{10, big.NewInt(1), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(1), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"existing eth account, contract account",
 			ethAddr,
-			types.StateDBAccount{10, big.NewInt(0), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(0), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			nil,
 		},
 		{
 			"existing base account, non-contract account",
 			baseAddr,
-			types.StateDBAccount{10, big.NewInt(10), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(10), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"existing base account, contract account",
 			baseAddr,
-			types.StateDBAccount{10, big.NewInt(99), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(99), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			nil,
 		},
 		{
 			"existing vesting account, non-contract account",
 			vestingAddr,
-			types.StateDBAccount{10, big.NewInt(1000), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(1000), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"existing vesting account, contract account",
 			vestingAddr,
-			types.StateDBAccount{10, big.NewInt(1001), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(1001), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			types.ErrInvalidAccount,
 		},
 	}
@@ -791,7 +791,7 @@ func (suite *KeeperTestSuite) TestAddLog() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			vmdb := statedb.New(suite.ctx, suite.app.EvmKeeper, types.NewTxConfig(
+			vmdb := statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewTxConfig(
 				common.BytesToHash(suite.ctx.HeaderHash().Bytes()),
 				tc.hash,
 				0, 0,

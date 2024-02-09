@@ -22,10 +22,30 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/x/evm/types"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
+
+// Account is the Ethereum consensus representation of accounts.
+// These objects are stored in the storage of auth module.
+type Account struct {
+	Nonce    uint64
+	Balance  *big.Int
+	CodeHash []byte
+}
+
+// NewEmptyAccount returns an empty account.
+func NewEmptyAccount() *Account {
+	return &Account{
+		Balance:  new(big.Int),
+		CodeHash: emptyCodeHash,
+	}
+}
+
+// IsContract returns if the account contains contract code.
+func (acct Account) IsContract() bool {
+	return !bytes.Equal(acct.CodeHash, emptyCodeHash)
+}
 
 // Storage represents in-memory cache/buffer of contract storage.
 type Storage map[common.Hash]common.Hash
@@ -48,7 +68,7 @@ func (s Storage) SortedKeys() []common.Hash {
 type stateObject struct {
 	db *StateDB
 
-	account types.StateDBAccount
+	account Account
 	code    []byte
 
 	// state storage
@@ -63,7 +83,7 @@ type stateObject struct {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, account types.StateDBAccount) *stateObject {
+func newObject(db *StateDB, address common.Address, account Account) *stateObject {
 	if account.Balance == nil {
 		account.Balance = new(big.Int)
 	}
