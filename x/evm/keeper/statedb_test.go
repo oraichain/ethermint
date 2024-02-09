@@ -16,7 +16,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/evmos/ethermint/crypto/ethsecp256k1"
 	"github.com/evmos/ethermint/tests"
@@ -29,27 +28,27 @@ func (suite *KeeperTestSuite) TestCreateAccount() {
 	testCases := []struct {
 		name     string
 		addr     common.Address
-		malleate func(vm.StateDB, common.Address)
-		callback func(vm.StateDB, common.Address)
+		malleate func(*statedb.StateDB, common.Address)
+		callback func(*statedb.StateDB, common.Address)
 	}{
 		{
 			"reset account (keep balance)",
 			suite.Address,
-			func(vmdb vm.StateDB, addr common.Address) {
+			func(vmdb *statedb.StateDB, addr common.Address) {
 				vmdb.AddBalance(addr, big.NewInt(100))
 				suite.Require().NotZero(vmdb.GetBalance(addr).Int64())
 			},
-			func(vmdb vm.StateDB, addr common.Address) {
+			func(vmdb *statedb.StateDB, addr common.Address) {
 				suite.Require().Equal(vmdb.GetBalance(addr).Int64(), int64(100))
 			},
 		},
 		{
 			"create account",
 			tests.GenerateAddress(),
-			func(vmdb vm.StateDB, addr common.Address) {
+			func(vmdb *statedb.StateDB, addr common.Address) {
 				suite.Require().False(vmdb.Exist(addr))
 			},
-			func(vmdb vm.StateDB, addr common.Address) {
+			func(vmdb *statedb.StateDB, addr common.Address) {
 				suite.Require().True(vmdb.Exist(addr))
 			},
 		},
@@ -110,19 +109,19 @@ func (suite *KeeperTestSuite) TestSubBalance() {
 	testCases := []struct {
 		name     string
 		amount   *big.Int
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 		isNoOp   bool
 	}{
 		{
 			"positive amount, below zero",
 			big.NewInt(100),
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 			true,
 		},
 		{
 			"positive amount, above zero",
 			big.NewInt(50),
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				vmdb.AddBalance(suite.Address, big.NewInt(100))
 			},
 			false,
@@ -130,13 +129,13 @@ func (suite *KeeperTestSuite) TestSubBalance() {
 		{
 			"zero amount",
 			big.NewInt(0),
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 			true,
 		},
 		{
 			"negative amount",
 			big.NewInt(-1),
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 			false,
 		},
 	}
@@ -164,19 +163,19 @@ func (suite *KeeperTestSuite) TestGetNonce() {
 		name          string
 		address       common.Address
 		expectedNonce uint64
-		malleate      func(vm.StateDB)
+		malleate      func(*statedb.StateDB)
 	}{
 		{
 			"account not found",
 			tests.GenerateAddress(),
 			0,
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 		},
 		{
 			"existing account",
 			suite.Address,
 			1,
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				vmdb.SetNonce(suite.Address, 1)
 			},
 		},
@@ -235,55 +234,55 @@ func (suite *KeeperTestSuite) TestSetAccount() {
 	testCases := []struct {
 		name        string
 		address     common.Address
-		account     types.StateDBAccount
+		account     statedb.Account
 		expectedErr error
 	}{
 		{
 			"new account, non-contract account",
 			tests.GenerateAddress(),
-			types.StateDBAccount{10, big.NewInt(100), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(100), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"new account, contract account",
 			tests.GenerateAddress(),
-			types.StateDBAccount{10, big.NewInt(100), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(100), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			nil,
 		},
 		{
 			"existing eth account, non-contract account",
 			ethAddr,
-			types.StateDBAccount{10, big.NewInt(1), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(1), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"existing eth account, contract account",
 			ethAddr,
-			types.StateDBAccount{10, big.NewInt(0), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(0), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			nil,
 		},
 		{
 			"existing base account, non-contract account",
 			baseAddr,
-			types.StateDBAccount{10, big.NewInt(10), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(10), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"existing base account, contract account",
 			baseAddr,
-			types.StateDBAccount{10, big.NewInt(99), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(99), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			nil,
 		},
 		{
 			"existing vesting account, non-contract account",
 			vestingAddr,
-			types.StateDBAccount{10, big.NewInt(1000), types.EmptyCodeHash},
+			statedb.Account{10, big.NewInt(1000), types.EmptyCodeHash},
 			nil,
 		},
 		{
 			"existing vesting account, contract account",
 			vestingAddr,
-			types.StateDBAccount{10, big.NewInt(1001), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10, big.NewInt(1001), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
 			types.ErrInvalidAccount,
 		},
 	}
@@ -331,25 +330,25 @@ func (suite *KeeperTestSuite) TestGetCodeHash() {
 		name     string
 		address  common.Address
 		expHash  common.Hash
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 	}{
 		{
 			"account not found",
 			tests.GenerateAddress(),
 			common.Hash{},
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 		},
 		{
 			"account not EthAccount type, EmptyCodeHash",
 			addr,
 			common.BytesToHash(types.EmptyCodeHash),
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 		},
 		{
 			"existing account",
 			suite.Address,
 			crypto.Keccak256Hash([]byte("codeHash")),
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				vmdb.SetCode(suite.Address, []byte("codeHash"))
 			},
 		},
@@ -458,13 +457,13 @@ func (suite *KeeperTestSuite) TestKeeperSetCode() {
 func (suite *KeeperTestSuite) TestRefund() {
 	testCases := []struct {
 		name      string
-		malleate  func(vm.StateDB)
+		malleate  func(*statedb.StateDB)
 		expRefund uint64
 		expPanic  bool
 	}{
 		{
 			"success - add and subtract refund",
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				vmdb.AddRefund(11)
 			},
 			1,
@@ -472,7 +471,7 @@ func (suite *KeeperTestSuite) TestRefund() {
 		},
 		{
 			"fail - subtract amount > current refund",
-			func(vm.StateDB) {
+			func(*statedb.StateDB) {
 			},
 			0,
 			true,
@@ -602,14 +601,14 @@ func (suite *KeeperTestSuite) TestExist() {
 	testCases := []struct {
 		name     string
 		address  common.Address
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 		exists   bool
 	}{
-		{"success, account exists", suite.Address, func(vm.StateDB) {}, true},
-		{"success, has suicided", suite.Address, func(vmdb vm.StateDB) {
+		{"success, account exists", suite.Address, func(*statedb.StateDB) {}, true},
+		{"success, has suicided", suite.Address, func(vmdb *statedb.StateDB) {
 			vmdb.Suicide(suite.Address)
 		}, true},
-		{"success, account doesn't exist", tests.GenerateAddress(), func(vm.StateDB) {}, false},
+		{"success, account doesn't exist", tests.GenerateAddress(), func(*statedb.StateDB) {}, false},
 	}
 
 	for _, tc := range testCases {
@@ -626,17 +625,17 @@ func (suite *KeeperTestSuite) TestEmpty() {
 	testCases := []struct {
 		name     string
 		address  common.Address
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 		empty    bool
 	}{
-		{"empty, account exists", suite.Address, func(vm.StateDB) {}, true},
+		{"empty, account exists", suite.Address, func(*statedb.StateDB) {}, true},
 		{
 			"not empty, positive balance",
 			suite.Address,
-			func(vmdb vm.StateDB) { vmdb.AddBalance(suite.Address, big.NewInt(100)) },
+			func(vmdb *statedb.StateDB) { vmdb.AddBalance(suite.Address, big.NewInt(100)) },
 			false,
 		},
-		{"empty, account doesn't exist", tests.GenerateAddress(), func(vm.StateDB) {}, true},
+		{"empty, account doesn't exist", tests.GenerateAddress(), func(*statedb.StateDB) {}, true},
 	}
 
 	for _, tc := range testCases {
@@ -657,9 +656,9 @@ func (suite *KeeperTestSuite) TestSnapshot() {
 
 	testCases := []struct {
 		name     string
-		malleate func(vm.StateDB)
+		malleate func(*statedb.StateDB)
 	}{
-		{"simple revert", func(vmdb vm.StateDB) {
+		{"simple revert", func(vmdb *statedb.StateDB) {
 			revision := vmdb.Snapshot()
 			suite.Require().Zero(revision)
 
@@ -671,7 +670,7 @@ func (suite *KeeperTestSuite) TestSnapshot() {
 			// reverted
 			suite.Require().Equal(common.Hash{}, vmdb.GetState(suite.Address, key))
 		}},
-		{"nested snapshot/revert", func(vmdb vm.StateDB) {
+		{"nested snapshot/revert", func(vmdb *statedb.StateDB) {
 			revision1 := vmdb.Snapshot()
 			suite.Require().Zero(revision1)
 
@@ -688,7 +687,7 @@ func (suite *KeeperTestSuite) TestSnapshot() {
 			vmdb.RevertToSnapshot(revision1)
 			suite.Require().Equal(common.Hash{}, vmdb.GetState(suite.Address, key))
 		}},
-		{"jump revert", func(vmdb vm.StateDB) {
+		{"jump revert", func(vmdb *statedb.StateDB) {
 			revision1 := vmdb.Snapshot()
 			vmdb.SetState(suite.Address, key, value1)
 			vmdb.Snapshot()
@@ -758,7 +757,7 @@ func (suite *KeeperTestSuite) TestAddLog() {
 		name        string
 		hash        common.Hash
 		log, expLog *ethtypes.Log // pre and post populating log fields
-		malleate    func(vm.StateDB)
+		malleate    func(*statedb.StateDB)
 	}{
 		{
 			"tx hash from message",
@@ -772,7 +771,7 @@ func (suite *KeeperTestSuite) TestAddLog() {
 				TxHash:  txHash,
 				Topics:  make([]common.Hash, 0),
 			},
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 		},
 		{
 			"dynamicfee tx hash from message",
@@ -786,14 +785,14 @@ func (suite *KeeperTestSuite) TestAddLog() {
 				TxHash:  txHash3,
 				Topics:  make([]common.Hash, 0),
 			},
-			func(vm.StateDB) {},
+			func(*statedb.StateDB) {},
 		},
 	}
 
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
-			vmdb := statedb.New(suite.Ctx, suite.App.EvmKeeper, types.NewTxConfig(
+			vmdb := statedb.New(suite.Ctx, suite.App.EvmKeeper, statedb.NewTxConfig(
 				common.BytesToHash(suite.Ctx.HeaderHash().Bytes()),
 				tc.hash,
 				0, 0,
@@ -883,13 +882,13 @@ func (suite *KeeperTestSuite) _TestForEachStorage() {
 
 	testCase := []struct {
 		name      string
-		malleate  func(vm.StateDB)
+		malleate  func(*statedb.StateDB)
 		callback  func(key, value common.Hash) (stop bool)
 		expValues []common.Hash
 	}{
 		{
 			"aggregate state",
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				for i := 0; i < 5; i++ {
 					vmdb.SetState(suite.Address, common.BytesToHash([]byte(fmt.Sprintf("key%d", i))), common.BytesToHash([]byte(fmt.Sprintf("value%d", i))))
 				}
@@ -908,7 +907,7 @@ func (suite *KeeperTestSuite) _TestForEachStorage() {
 		},
 		{
 			"filter state",
-			func(vmdb vm.StateDB) {
+			func(vmdb *statedb.StateDB) {
 				vmdb.SetState(suite.Address, common.BytesToHash([]byte("key")), common.BytesToHash([]byte("value")))
 				vmdb.SetState(suite.Address, common.BytesToHash([]byte("filterkey")), common.BytesToHash([]byte("filtervalue")))
 			},

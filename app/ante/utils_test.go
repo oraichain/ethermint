@@ -53,7 +53,6 @@ import (
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
-	"github.com/evmos/ethermint/x/evm/vm"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -74,8 +73,8 @@ type AnteTestSuite struct {
 
 const TestGasLimit uint64 = 100000
 
-func (suite *AnteTestSuite) StateDB() vm.StateDB {
-	return statedb.New(suite.ctx, suite.app.EvmKeeper, evmtypes.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash().Bytes())))
+func (suite *AnteTestSuite) StateDB() *statedb.StateDB {
+	return statedb.New(suite.ctx, suite.app.EvmKeeper, statedb.NewEmptyTxConfig(common.BytesToHash(suite.ctx.HeaderHash().Bytes())))
 }
 
 func (suite *AnteTestSuite) SetupTest() {
