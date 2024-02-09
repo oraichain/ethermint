@@ -10,8 +10,8 @@ import (
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	evmtypes "github.com/evmos/ethermint/x/evm/types"
-	"github.com/evmos/ethermint/x/evm/vm"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -26,7 +26,7 @@ func (suite AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
 	tx.From = addr.Hex()
 
-	var vmdb vm.StateDB
+	var vmdb *statedb.StateDB
 
 	testCases := []struct {
 		name     string
@@ -192,7 +192,7 @@ func (suite AnteTestSuite) TestEthGasConsumeDecorator() {
 	dynamicFeeTx.From = addr.Hex()
 	dynamicFeeTxPriority := int64(1)
 
-	var vmdb vm.StateDB
+	var vmdb *statedb.StateDB
 
 	testCases := []struct {
 		name        string
@@ -352,7 +352,7 @@ func (suite AnteTestSuite) TestCanTransferDecorator() {
 	err := tx.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
-	var vmdb vm.StateDB
+	var vmdb *statedb.StateDB
 
 	testCases := []struct {
 		name     string
