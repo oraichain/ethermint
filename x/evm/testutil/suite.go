@@ -211,8 +211,8 @@ func (suite *TestSuite) EvmDenom() string {
 }
 
 // Commit and begin new block
-func (suite *TestSuite) Commit() {
-	_ = suite.App.Commit()
+func (suite *TestSuite) Commit() abci.ResponseCommit {
+	res := suite.App.Commit()
 	header := suite.Ctx.BlockHeader()
 	header.Height++
 	suite.App.BeginBlock(abci.RequestBeginBlock{
@@ -225,6 +225,8 @@ func (suite *TestSuite) Commit() {
 	queryHelper := baseapp.NewQueryServerTestHelper(suite.Ctx, suite.App.InterfaceRegistry())
 	types.RegisterQueryServer(queryHelper, suite.App.EvmKeeper)
 	suite.QueryClient = types.NewQueryClient(queryHelper)
+
+	return res
 }
 
 func (suite *TestSuite) StateDB() *statedb.StateDB {

@@ -728,15 +728,6 @@ func (suite *KeeperTestSuite) TestGetProposerAddress() {
 }
 
 func (suite *KeeperTestSuite) TestConsistency() {
-	keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
-	msg, err := suite.createContractGethMsg(
-		suite.StateDB().GetNonce(suite.Address),
-		ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID()),
-		keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID()),
-		big.NewInt(1),
-	)
-	suite.Require().NoError(err)
-
 	var tracer bytes.Buffer
 
 	suite.App.SetCommitMultiStoreTracer(&tracer)
@@ -748,17 +739,22 @@ func (suite *KeeperTestSuite) TestConsistency() {
 		"tracer should be enabled",
 	)
 
-	res, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, msg, nil, true)
-	suite.Require().NoError(err)
-	suite.Require().Empty(res.VmError)
+	addr := suite.DeployTestContract(suite.T(), suite.Address, big.NewInt(10000000000000))
+	res := suite.Commit()
 
 	suite.Require().NotEmpty(tracer.Bytes(), "tracer should have recorded something")
-	suite.T().Logf("Logs: %v", res.Logs)
 
 	// Log the tracer contents
 	suite.T().Logf("Tracer (%v): %s", tracer.Len(), tracer.String())
 
 	// Write tracer contents to file
-	err = os.WriteFile(fmt.Sprintf("tracer-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
+	err := os.WriteFile(fmt.Sprintf("tracer-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
 	suite.Require().NoError(err)
+
+	// Get block hash
+	suite.T().Logf("commitID.Hash: %x", res.Data)
+
+	// Check the state
+	acc := suite.App.EvmKeeper.GetAccount(suite.Ctx, addr)
+	suite.Require().True(acc.IsContract())
 }
