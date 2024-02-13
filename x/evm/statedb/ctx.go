@@ -65,6 +65,10 @@ func (c *SnapshotCommitCtx) Snapshot(
 	// Branch off a new CacheMultiStore + write function
 	newCtx, newWrite := c.CurrentCtx().CacheContext()
 
+	// Disable tracing for the branched context
+	ms := newCtx.MultiStore().SetTracer(nil)
+	newCtx = newCtx.WithMultiStore(ms)
+
 	// Save the new snapshot to the list
 	c.snapshots = append(c.snapshots, CtxSnapshot{
 		id:    id,
