@@ -741,7 +741,7 @@ func (suite *KeeperTestSuite) TestConsistency() {
 	addr := suite.DeployTestContract(suite.T(), suite.address, big.NewInt(10000000000000))
 	suite.Require().NotEmpty(tracer.Bytes(), "tracer should have recorded something")
 
-	suite.Commit()
+	res := suite.Commit()
 
 	// Log the tracer contents
 	suite.T().Logf("Tracer (%v): %s", tracer.Len(), tracer.String())
@@ -749,6 +749,8 @@ func (suite *KeeperTestSuite) TestConsistency() {
 	// Write tracer contents to file
 	err := os.WriteFile(fmt.Sprintf("tracer-journal-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
 	suite.Require().NoError(err)
+
+	suite.T().Logf("commitID.Hash: %x", res.Data)
 
 	acc := suite.app.EvmKeeper.GetAccount(suite.ctx, addr)
 	suite.Require().True(acc.IsContract())
