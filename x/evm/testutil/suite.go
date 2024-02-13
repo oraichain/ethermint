@@ -93,10 +93,16 @@ func (suite *TestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	suite.Address = common.BytesToAddress(priv.PubKey().Address().Bytes())
 	suite.Signer = tests.NewSigner(priv)
 
+	suite.Require().Equal("0x71562b71999873DB5b286dF957af199Ec94617F7", suite.Address.Hex())
+
 	// consensus key
-	priv, err = ethsecp256k1.GenerateKey()
+	priv = &ethsecp256k1.PrivKey{
+		Key: common.Hex2Bytes("a249d5fbd4516fde5765dbd763b93c3542bf2748b6cd512eb96e0862b3583261"),
+	}
 	require.NoError(t, err)
 	suite.ConsAddress = sdk.ConsAddress(priv.PubKey().Address())
+
+	suite.Require().Equal("cosmosvalcons1505eel9r7tnacxyzsqysysudwgucvhl53t7p70", suite.ConsAddress.String())
 
 	suite.App = app.Setup(checkTx, func(app *app.EthermintApp, genesis simapp.GenesisState) simapp.GenesisState {
 		feemarketGenesis := feemarkettypes.DefaultGenesisState()
@@ -154,9 +160,10 @@ func (suite *TestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	}
 
 	suite.Ctx = suite.App.BaseApp.NewContext(checkTx, tmproto.Header{
-		Height:          1,
-		ChainID:         "ethermint_9000-1",
-		Time:            time.Now().UTC(),
+		Height:  1,
+		ChainID: "ethermint_9000-1",
+		// Fixed date to have deterministic tests
+		Time:            time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
 		ProposerAddress: suite.ConsAddress.Bytes(),
 		Version: tmversion.Consensus{
 			Block: version.BlockProtocol,
@@ -189,6 +196,9 @@ func (suite *TestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 	suite.App.AccountKeeper.SetAccount(suite.Ctx, acc)
 
 	valAddr := sdk.ValAddress(suite.Address.Bytes())
+
+	suite.Equal("cosmosvaloper1w9tzkuvenpeakkegdhu40tcenmy5v9lhc9rt8k", valAddr.String())
+
 	validator, err := stakingtypes.NewValidator(valAddr, priv.PubKey(), stakingtypes.Description{})
 	require.NoError(t, err)
 	err = suite.App.StakingKeeper.SetValidatorByConsAddr(suite.Ctx, validator)
