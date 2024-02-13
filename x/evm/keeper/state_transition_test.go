@@ -751,10 +751,8 @@ func (suite *KeeperTestSuite) TestConsistency() {
 	err := os.WriteFile(fmt.Sprintf("tracer-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
 	suite.Require().NoError(err)
 
-	// Get block hash
 	suite.T().Logf("commitID.Hash: %x", res.Data)
 
-	// Check the state
 	acc := suite.App.EvmKeeper.GetAccount(suite.Ctx, addr)
 	suite.Require().True(acc.IsContract())
 }
