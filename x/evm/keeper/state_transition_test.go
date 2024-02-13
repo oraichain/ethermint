@@ -1,9 +1,12 @@
 package keeper_test
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
+	"os"
+	"time"
 
 	"github.com/cometbft/cometbft/crypto/tmhash"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
@@ -675,10 +678,14 @@ func (suite *KeeperTestSuite) createContractGethMsg(nonce uint64, signer ethtype
 func (suite *KeeperTestSuite) createContractMsgTx(nonce uint64, signer ethtypes.Signer, cfg *params.ChainConfig, gasPrice *big.Int) (*types.MsgEthereumTx, error) {
 	contractCreateTx := &ethtypes.AccessListTx{
 		GasPrice: gasPrice,
-		Gas:      params.TxGasContractCreation,
+		Gas:      params.TxGasContractCreation * 2,
 		To:       nil,
-		Data:     []byte("contract_data"),
-		Nonce:    nonce,
+		// Minimal contract data
+		// https://ethereum.stackexchange.com/questions/40757/what-is-the-shortest-bytecode-that-will-publish-a-contract-with-non-zero-bytecod
+		// Using the previous string "contract_data" as contract code may cause
+		// an error as it includes 0x5f which is PUSH0, only on Shanghai and later
+		Data:  common.Hex2Bytes("0x3859818153F3"),
+		Nonce: nonce,
 	}
 	ethTx := ethtypes.NewTx(contractCreateTx)
 	ethMsg := &types.MsgEthereumTx{}
@@ -718,4 +725,40 @@ func (suite *KeeperTestSuite) TestGetProposerAddress() {
 			suite.Require().Equal(tc.expAdr, keeper.GetProposerAddress(suite.Ctx, tc.adr))
 		})
 	}
+}
+
+func (suite *KeeperTestSuite) TestConsistency() {
+	keeperParams := suite.App.EvmKeeper.GetParams(suite.Ctx)
+	msg, err := suite.createContractGethMsg(
+		suite.StateDB().GetNonce(suite.Address),
+		ethtypes.LatestSignerForChainID(suite.App.EvmKeeper.ChainID()),
+		keeperParams.ChainConfig.EthereumConfig(suite.App.EvmKeeper.ChainID()),
+		big.NewInt(1),
+	)
+	suite.Require().NoError(err)
+
+	var tracer bytes.Buffer
+
+	suite.App.SetCommitMultiStoreTracer(&tracer)
+	// Commit so the ctx is updated with the tracer
+	suite.Commit()
+
+	suite.Require().True(
+		suite.Ctx.MultiStore().TracingEnabled(),
+		"tracer should be enabled",
+	)
+
+	res, err := suite.App.EvmKeeper.ApplyMessage(suite.Ctx, msg, nil, true)
+	suite.Require().NoError(err)
+	suite.Require().Empty(res.VmError)
+
+	suite.Require().NotEmpty(tracer.Bytes(), "tracer should have recorded something")
+	suite.T().Logf("Logs: %v", res.Logs)
+
+	// Log the tracer contents
+	suite.T().Logf("Tracer (%v): %s", tracer.Len(), tracer.String())
+
+	// Write tracer contents to file
+	err = os.WriteFile(fmt.Sprintf("tracer-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
+	suite.Require().NoError(err)
 }
