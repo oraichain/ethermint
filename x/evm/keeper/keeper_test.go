@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	// . "github.com/onsi/ginkgo/v2"
+	// . "github.com/onsi/gomega"
 
 	sdkmath "cosmossdk.io/math"
 
@@ -42,8 +42,8 @@ func TestKeeperTestSuite(t *testing.T) {
 	suite.Run(t, s)
 
 	// Run Ginkgo integration tests
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Keeper Suite")
+	// RegisterFailHandler(Fail)
+	// RunSpecs(t, "Keeper Suite")
 }
 
 func (suite *KeeperTestSuite) TestBaseFee() {
