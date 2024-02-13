@@ -753,6 +753,12 @@ func (suite *KeeperTestSuite) TestConsistency() {
 
 	suite.T().Logf("commitID.Hash: %x", res.Data)
 
+	suite.Require().Equal(
+		common.Hex2Bytes("e14ebe2d29a2ddef2a782f0c80b0c7d8d2caa68727b6b990ed348014374fe937"),
+		res.Data,
+		"commitID.Hash should match",
+	)
+
 	acc := suite.App.EvmKeeper.GetAccount(suite.Ctx, addr)
 	suite.Require().True(acc.IsContract())
 }
