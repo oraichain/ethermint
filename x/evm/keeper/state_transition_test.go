@@ -1,9 +1,12 @@
 package keeper_test
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
+	"os"
+	"time"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -675,10 +678,14 @@ func (suite *KeeperTestSuite) createContractGethMsg(nonce uint64, signer ethtype
 func (suite *KeeperTestSuite) createContractMsgTx(nonce uint64, signer ethtypes.Signer, cfg *params.ChainConfig, gasPrice *big.Int) (*types.MsgEthereumTx, error) {
 	contractCreateTx := &ethtypes.AccessListTx{
 		GasPrice: gasPrice,
-		Gas:      params.TxGasContractCreation,
+		Gas:      params.TxGasContractCreation * 2,
 		To:       nil,
-		Data:     []byte("contract_data"),
-		Nonce:    nonce,
+		// Minimal contract data
+		// https://ethereum.stackexchange.com/questions/40757/what-is-the-shortest-bytecode-that-will-publish-a-contract-with-non-zero-bytecod
+		// Using the previous string "contract_data" as contract code may cause
+		// an error as it includes 0x5f which is PUSH0, only on Shanghai and later
+		Data:  common.Hex2Bytes("0x3859818153F3"),
+		Nonce: nonce,
 	}
 	ethTx := ethtypes.NewTx(contractCreateTx)
 	ethMsg := &types.MsgEthereumTx{}
@@ -718,4 +725,31 @@ func (suite *KeeperTestSuite) TestGetProposerAddress() {
 			suite.Require().Equal(tc.expAdr, keeper.GetProposerAddress(suite.ctx, tc.adr))
 		})
 	}
+}
+
+func (suite *KeeperTestSuite) TestConsistency() {
+	var tracer bytes.Buffer
+	suite.app.SetCommitMultiStoreTracer(&tracer)
+	// Commit so the ctx is updated with the tracer
+	suite.Commit()
+
+	suite.Require().True(
+		suite.ctx.MultiStore().TracingEnabled(),
+		"tracer should be enabled",
+	)
+
+	addr := suite.DeployTestContract(suite.T(), suite.address, big.NewInt(10000000000000))
+	suite.Require().NotEmpty(tracer.Bytes(), "tracer should have recorded something")
+
+	suite.Commit()
+
+	// Log the tracer contents
+	suite.T().Logf("Tracer (%v): %s", tracer.Len(), tracer.String())
+
+	// Write tracer contents to file
+	err := os.WriteFile(fmt.Sprintf("tracer-journal-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
+	suite.Require().NoError(err)
+
+	acc := suite.app.EvmKeeper.GetAccount(suite.ctx, addr)
+	suite.Require().True(acc.IsContract())
 }

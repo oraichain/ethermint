@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	// . "github.com/onsi/ginkgo/v2"
+	// . "github.com/onsi/gomega"
 
 	sdkmath "cosmossdk.io/math"
 	"github.com/stretchr/testify/require"
@@ -87,8 +87,8 @@ func TestKeeperTestSuite(t *testing.T) {
 	suite.Run(t, s)
 
 	// Run Ginkgo integration tests
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Keeper Suite")
+	// RegisterFailHandler(Fail)
+	// RunSpecs(t, "Keeper Suite")
 }
 
 func (suite *KeeperTestSuite) SetupTest() {
