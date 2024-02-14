@@ -738,8 +738,10 @@ func (suite *KeeperTestSuite) TestConsistency() {
 		"tracer should be enabled",
 	)
 
-	addr := suite.DeployTestContract(suite.T(), suite.address, big.NewInt(10000000000000))
+	contractAddr := suite.DeployTestContract(suite.T(), suite.address, big.NewInt(10000000000000))
 	suite.Require().NotEmpty(tracer.Bytes(), "tracer should have recorded something")
+
+	_ = suite.TransferERC20Token(suite.T(), contractAddr, suite.address, common.Address{1}, big.NewInt(10000000000000))
 
 	res := suite.Commit()
 
@@ -752,6 +754,15 @@ func (suite *KeeperTestSuite) TestConsistency() {
 
 	suite.T().Logf("commitID.Hash: %x", res.Data)
 
-	acc := suite.app.EvmKeeper.GetAccount(suite.ctx, addr)
+	expectedHash := common.Hex2Bytes("db2f649b83d65b13a58f11d0e9d7516f5a906230ff85f89a975635e4dbdeac79")
+	suite.Require().Equalf(
+		expectedHash,
+		res.Data,
+		"commitID.Hash should match, expected %x, got %x",
+		expectedHash,
+		res.Data,
+	)
+
+	acc := suite.app.EvmKeeper.GetAccount(suite.ctx, contractAddr)
 	suite.Require().True(acc.IsContract())
 }
