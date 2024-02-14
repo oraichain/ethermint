@@ -738,10 +738,11 @@ func (suite *KeeperTestSuite) TestConsistency() {
 		"tracer should be enabled",
 	)
 
-	contractAddr := suite.DeployTestContract(suite.T(), suite.address, big.NewInt(10000000000000))
+	contractAddr := suite.DeployTestContract(suite.T(), suite.address, big.NewInt(100))
 	suite.Require().NotEmpty(tracer.Bytes(), "tracer should have recorded something")
 
-	_ = suite.TransferERC20Token(suite.T(), contractAddr, suite.address, common.Address{1}, big.NewInt(10000000000000))
+	_, _, err := suite.TransferERC20Token(contractAddr, suite.address, common.Address{1}, big.NewInt(1000))
+	suite.Require().Error(err)
 
 	res := suite.Commit()
 
@@ -749,12 +750,12 @@ func (suite *KeeperTestSuite) TestConsistency() {
 	suite.T().Logf("Tracer (%v): %s", tracer.Len(), tracer.String())
 
 	// Write tracer contents to file
-	err := os.WriteFile(fmt.Sprintf("tracer-journal-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
+	err = os.WriteFile(fmt.Sprintf("tracer-journal-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
 	suite.Require().NoError(err)
 
 	suite.T().Logf("commitID.Hash: %x", res.Data)
 
-	expectedHash := common.Hex2Bytes("db2f649b83d65b13a58f11d0e9d7516f5a906230ff85f89a975635e4dbdeac79")
+	expectedHash := common.Hex2Bytes("10eaacd8ba1a2763c7ef1ac1090f7687baa299d2330ea1d593860a7aece3ecb5")
 	suite.Require().Equalf(
 		expectedHash,
 		res.Data,

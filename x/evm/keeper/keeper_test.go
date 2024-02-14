@@ -326,20 +326,33 @@ func (suite *KeeperTestSuite) DeployTestContract(t require.TestingT, owner commo
 	return crypto.CreateAddress(suite.address, nonce)
 }
 
-func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAddr, from, to common.Address, amount *big.Int) *types.MsgEthereumTx {
+func (suite *KeeperTestSuite) MustTransferERC20Token(t require.TestingT, contractAddr, from, to common.Address, amount *big.Int) *types.MsgEthereumTx {
+	ercTransferTx, rsp, err := suite.TransferERC20Token(contractAddr, from, to, amount)
+	require.NoError(t, err)
+	require.Empty(t, rsp.VmError)
+	return ercTransferTx
+}
+
+func (suite *KeeperTestSuite) TransferERC20Token(contractAddr, from, to common.Address, amount *big.Int) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
 	ctx := sdk.WrapSDKContext(suite.ctx)
 	chainID := suite.app.EvmKeeper.ChainID()
 
 	transferData, err := types.ERC20Contract.ABI.Pack("transfer", to, amount)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, nil, err
+	}
 	args, err := json.Marshal(&types.TransactionArgs{To: &contractAddr, From: &from, Data: (*hexutil.Bytes)(&transferData)})
-	require.NoError(t, err)
+	if err != nil {
+		return nil, nil, err
+	}
 	res, err := suite.queryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          25_000_000,
 		ProposerAddress: suite.ctx.BlockHeader().ProposerAddress,
 	})
-	require.NoError(t, err)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	nonce := suite.app.EvmKeeper.GetNonce(suite.ctx, suite.address)
 
@@ -373,11 +386,15 @@ func (suite *KeeperTestSuite) TransferERC20Token(t require.TestingT, contractAdd
 
 	ercTransferTx.From = suite.address.Hex()
 	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.signer)
-	require.NoError(t, err)
+	if err != nil {
+		return nil, nil, err
+	}
 	rsp, err := suite.app.EvmKeeper.EthereumTx(ctx, ercTransferTx)
-	require.NoError(t, err)
-	require.Empty(t, rsp.VmError)
-	return ercTransferTx
+	if err != nil {
+		return nil, rsp, err
+	}
+
+	return ercTransferTx, rsp, nil
 }
 
 // DeployTestMessageCall deploy a test erc20 contract and returns the contract address
