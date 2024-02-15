@@ -63,6 +63,8 @@ type Keeper struct {
 	// fetch EIP1559 base fee and parameters
 	feeMarketKeeper types.FeeMarketKeeper
 
+	ibcTransferKeeper statedb.IBCTransferKeeper
+
 	// chain ID number obtained from the context's chain id
 	eip155ChainID *big.Int
 
@@ -91,6 +93,7 @@ func NewKeeper(
 	bankKeeper types.BankKeeper,
 	sk types.StakingKeeper,
 	fmk types.FeeMarketKeeper,
+	ibcTransferKeeper statedb.IBCTransferKeeper,
 	customPrecompiles evm.PrecompiledContracts,
 	evmConstructor evm.Constructor,
 	tracer string,
@@ -118,6 +121,7 @@ func NewKeeper(
 		bankKeeper:        bankKeeper,
 		stakingKeeper:     sk,
 		feeMarketKeeper:   fmk,
+		ibcTransferKeeper: ibcTransferKeeper,
 		storeKey:          storeKey,
 		transientKey:      transientKey,
 		customPrecompiles: customPrecompiles,
@@ -399,4 +403,8 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	}
 	k.SetTransientGasUsed(ctx, result)
 	return result, nil
+}
+
+func (k Keeper) IBCTransferKeeper() statedb.IBCTransferKeeper {
+	return k.ibcTransferKeeper
 }
