@@ -16,6 +16,7 @@
 package geth
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -40,6 +41,7 @@ type EVM struct {
 // the default precompiled contracts and the EVM concrete implementation from
 // geth.
 func NewEVM(
+	goCtx context.Context,
 	blockCtx vm.BlockContext,
 	txCtx vm.TxContext,
 	stateDB vm.StateDB,
@@ -48,7 +50,7 @@ func NewEVM(
 	_ evm.PrecompiledContracts, // unused
 ) evm.EVM {
 	return &EVM{
-		EVM: vm.NewEVM(blockCtx, txCtx, stateDB, chainConfig, config),
+		EVM: vm.NewEVMWithContext(goCtx, blockCtx, txCtx, stateDB, chainConfig, config),
 	}
 }
 

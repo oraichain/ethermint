@@ -16,6 +16,7 @@
 package vm
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -75,6 +76,7 @@ type EVM interface {
 // Constructor defines the function used to instantiate the EVM on
 // each state transition.
 type Constructor func(
+	goCtx context.Context,
 	blockCtx vm.BlockContext,
 	txCtx vm.TxContext,
 	stateDB vm.StateDB,

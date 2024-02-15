@@ -16,16 +16,21 @@
 package statedb
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"sort"
 
 	errorsmod "cosmossdk.io/errors"
+	"github.com/cosmos/cosmos-sdk/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	ibcclienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/precompile/contract"
 )
 
 // revision is the identifier of a version of state.
@@ -83,6 +88,10 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 // Keeper returns the underlying `Keeper`
 func (s *StateDB) Keeper() Keeper {
 	return s.keeper
+}
+
+func (s *StateDB) Context() context.Context {
+	return s.ctx
 }
 
 // AddLog adds a log, called by evm.
@@ -475,4 +484,46 @@ func (s *StateDB) Commit() error {
 		}
 	}
 	return nil
+}
+
+func (s *StateDB) IBCTransfer(goCtx context.Context, msg *contract.MsgTransfer) (*contract.MsgTransferResponse, error) {
+	resp, err := s.keeper.IBCTransferKeeper().Transfer(goCtx, newMsgTransfer(msg))
+	if err != nil {
+		return nil, err
+	}
+
+	return newMsgTransferResponse(resp), nil
+}
+
+func newMsgTransfer(m *contract.MsgTransfer) *ibctransfertypes.MsgTransfer {
+	return &ibctransfertypes.MsgTransfer{
+		SourcePort:       m.SourcePort,
+		SourceChannel:    m.SourceChannel,
+		Token:            newCoin(m.Token),
+		Sender:           m.Sender,
+		Receiver:         m.Receiver,
+		TimeoutHeight:    newHeight(m.TimeoutHeight),
+		TimeoutTimestamp: m.TimeoutTimestamp,
+		Memo:             m.Memo,
+	}
+}
+
+func newCoin(c contract.Coin) types.Coin {
+	return types.Coin{
+		Denom:  c.Denom,
+		Amount: c.Amount,
+	}
+}
+
+func newHeight(h contract.Height) ibcclienttypes.Height {
+	return ibcclienttypes.Height{
+		RevisionNumber: h.RevisionNumber,
+		RevisionHeight: h.RevisionHeight,
+	}
+}
+
+func newMsgTransferResponse(r *ibctransfertypes.MsgTransferResponse) *contract.MsgTransferResponse {
+	return &contract.MsgTransferResponse{
+		Sequence: r.Sequence,
+	}
 }
