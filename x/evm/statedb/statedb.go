@@ -307,9 +307,14 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	commitedState := s.GetCommittedState(addr, key)
+	// Skip dirty noop state changes
+	currentState := s.keeper.GetState(s.ctx.CurrentCtx(), addr, key)
+	if currentState == value {
+		return
+	}
 
-	// Skip noop state changes
+	// Skip committed noop state changes
+	commitedState := s.GetCommittedState(addr, key)
 	if commitedState == value {
 		return
 	}
