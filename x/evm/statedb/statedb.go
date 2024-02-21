@@ -297,14 +297,23 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 	account := s.getOrNewAccount(addr)
 	account.CodeHash = crypto.Keccak256Hash(code).Bytes()
 
+	// Set account so CodeHash is updated
 	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
 		s.SetError(fmt.Errorf("failed to set account for code: %w", err))
 	}
+
 	s.keeper.SetCode(s.ctx.CurrentCtx(), account.CodeHash, code)
 }
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
+	commitedState := s.GetCommittedState(addr, key)
+
+	// Skip noop state changes
+	if commitedState == value {
+		return
+	}
+
 	s.keeper.SetState(s.ctx.CurrentCtx(), addr, key, value.Bytes())
 }
 
