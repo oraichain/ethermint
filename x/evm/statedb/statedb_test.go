@@ -224,21 +224,16 @@ func (suite *StateDBTestSuite) TestState() {
 	}{
 		{"empty state", func(db *statedb.StateDB) {
 		}, nil},
-		{"set empty value", func(db *statedb.StateDB) {
+
+		{"set empty value deletes", func(db *statedb.StateDB) {
 			db.SetState(address, key1, common.Hash{})
-		}, map[common.Hash]common.Hash{
-			// empty value still persisted
-			key1: common.Hash{},
-		}},
+		}, map[common.Hash]common.Hash{}},
+
 		{"noop state change", func(db *statedb.StateDB) {
-			// TODO: This doesn't actually change anything compared to committed state.
-			// Is this okay?
 			db.SetState(address, key1, value1)
 			db.SetState(address, key1, common.Hash{})
-		}, map[common.Hash]common.Hash{
-			// Still sets the key to an empty value even if there is no overall change
-			key1: common.Hash{},
-		}},
+		}, map[common.Hash]common.Hash{}},
+
 		{"set state", func(db *statedb.StateDB) {
 			// check empty initial state
 			suite.Require().Equal(common.Hash{}, db.GetState(address, key1))
