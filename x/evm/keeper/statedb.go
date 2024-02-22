@@ -266,20 +266,16 @@ func (k *Keeper) ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address)
 }
 
 // SetState update contract storage, delete if value is empty.
-func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
+func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key, value common.Hash) {
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
 	action := "updated"
 
-	// value is a common.Hash which will never be empty as it is always
-	// HashLength. The fix is not included here to preserve the original state
-	// behavior which will set empty hash values.
-	// TODO: Replace value parameter type with common.Hash and replace this
-	// checkwith a check for default hash.
-	if len(value) == 0 {
+	// Value is always HashLength long, so check if empty by comparing to zero hash
+	if (value == common.Hash{}) {
 		store.Delete(key.Bytes())
 		action = "deleted"
 	} else {
-		store.Set(key.Bytes(), value)
+		store.Set(key.Bytes(), value.Bytes())
 	}
 	k.Logger(ctx).Debug(
 		fmt.Sprintf("state %s", action),
@@ -362,7 +358,8 @@ func (k *Keeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
 
 	// clear storage
 	k.ForEachStorage(ctx, addr, func(key, _ common.Hash) bool {
-		k.SetState(ctx, addr, key, nil)
+		// Empty Hash to clear
+		k.SetState(ctx, addr, key, common.Hash{})
 		return true
 	})
 
