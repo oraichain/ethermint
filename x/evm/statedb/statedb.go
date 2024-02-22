@@ -307,19 +307,15 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	// Skip dirty noop state changes
-	currentState := s.keeper.GetState(s.ctx.CurrentCtx(), addr, key)
-	if currentState == value {
-		return
-	}
-
-	// Skip committed noop state changes
-	commitedState := s.GetCommittedState(addr, key)
-	if commitedState == value {
-		return
-	}
-
-	s.keeper.SetState(s.ctx.CurrentCtx(), addr, key, value.Bytes())
+	// We cannot attempt to skip noop changes by just checking committed state
+	// Example:
+	// 1. With committed state to 0x0
+	// 2. Dirty change to 0x1
+	// 3. Dirty change to 0x0 - cannot skip this
+	// 4. Commit
+	//
+	// End result: 0x0, but we cannot skip step 3 or it will be incorrectly 0x1
+	s.keeper.SetState(s.ctx.CurrentCtx(), addr, key, value)
 }
 
 // Suicide marks the given account as suicided.
