@@ -16,7 +16,10 @@
 package statedb
 
 import (
+	"context"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
 )
@@ -29,6 +32,10 @@ import (
 type ExtStateDB interface {
 	vm.StateDB
 	AppendJournalEntry(JournalEntry)
+}
+
+type IBCTransferKeeper interface {
+	Transfer(goCtx context.Context, msg *ibctransfertypes.MsgTransfer) (*ibctransfertypes.MsgTransferResponse, error)
 }
 
 // Keeper provide underlying storage of StateDB
@@ -45,4 +52,6 @@ type Keeper interface {
 	SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte)
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
 	DeleteAccount(ctx sdk.Context, addr common.Address) error
+
+	IBCTransferKeeper() IBCTransferKeeper
 }

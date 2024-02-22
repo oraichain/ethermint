@@ -52,6 +52,8 @@ func (k *Keeper) NewEVM(
 	tracer vm.EVMLogger,
 	stateDB vm.StateDB,
 ) evm.EVM {
+	goCtx := sdk.WrapSDKContext(ctx)
+
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    core.Transfer,
@@ -70,7 +72,7 @@ func (k *Keeper) NewEVM(
 		tracer = k.Tracer(ctx, msg, cfg.ChainConfig)
 	}
 	vmConfig := k.VMConfig(ctx, msg, cfg, tracer)
-	return k.evmConstructor(blockCtx, txCtx, stateDB, cfg.ChainConfig, vmConfig, k.customPrecompiles)
+	return k.evmConstructor(goCtx, blockCtx, txCtx, stateDB, cfg.ChainConfig, vmConfig, k.customPrecompiles)
 }
 
 // GetHashFn implements vm.GetHashFunc for Ethermint. It handles 3 cases:
