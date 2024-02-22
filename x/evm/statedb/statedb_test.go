@@ -229,10 +229,22 @@ func (suite *StateDBTestSuite) TestState() {
 			db.SetState(address, key1, common.Hash{})
 		}, map[common.Hash]common.Hash{}},
 
-		{"noop state change", func(db *statedb.StateDB) {
+		{"noop state change - empty", func(db *statedb.StateDB) {
 			db.SetState(address, key1, value1)
 			db.SetState(address, key1, common.Hash{})
 		}, map[common.Hash]common.Hash{}},
+
+		{"noop state change - non-empty", func(db *statedb.StateDB) {
+			// Start with non-empty committed state
+			db.SetState(address, key1, value1)
+			suite.Require().NoError(db.Commit())
+
+			db.SetState(address, key1, common.Hash{})
+			db.SetState(address, key1, value1)
+		}, map[common.Hash]common.Hash{
+			// Shouldn't be modified - Commit() may still write it again though
+			key1: value1,
+		}},
 
 		{"set state", func(db *statedb.StateDB) {
 			// check empty initial state
