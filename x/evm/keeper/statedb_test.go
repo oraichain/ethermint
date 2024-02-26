@@ -1,8 +1,10 @@
 package keeper_test
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
+	"testing"
 	"time"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -13,6 +15,7 @@ import (
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -1042,4 +1045,24 @@ func (suite *KeeperTestSuite) TestDeleteAccount() {
 			}
 		})
 	}
+}
+
+func TestAddr(t *testing.T) {
+	keyStr := "020000049F63EF0D60ABE49FDD8BEBFA5A688222224EC4D9707920AF1C31E65D7967377D4D5EE50176043F8243CFF4E367337F0777"
+	key, err := hex.DecodeString(keyStr)
+	require.NoError(t, err)
+
+	// First
+	prefixLength := len(types.KeyPrefixStorage)
+
+	// Remove the prefix from the byte slice
+	addressBytes := key[prefixLength : prefixLength+common.AddressLength]
+
+	// Convert the bytes back into an Ethereum address
+	address := common.BytesToAddress(addressBytes)
+
+	remainder := key[prefixLength+common.AddressLength:]
+
+	t.Logf("Address: %s", address.Hex())
+	t.Logf("Remainder: %s", hex.EncodeToString(remainder))
 }
