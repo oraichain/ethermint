@@ -27,6 +27,10 @@ func (suite *IntegrationTestSuite) TestState_EmptyToEmpty() {
 	addr := suite.DeployContract(testutil.StateTestContract)
 	storageBefore := suite.GetAllAccountStorage(suite.Ctx, addr)
 
+	contractAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, addr)
+	suite.Require().NotNil(contractAcc)
+	suite.Require().Equal(uint64(1), contractAcc.Nonce, "EIP-161: CREATE should increment nonce by 1 over default value (0)")
+
 	_, rsp, err := suite.CallContract(
 		testutil.StateTestContract,
 		addr,
