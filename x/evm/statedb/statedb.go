@@ -16,7 +16,6 @@
 package statedb
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
 
@@ -112,6 +111,8 @@ func (s *StateDB) Empty(addr common.Address) bool {
 		return true
 	}
 
+	// This relies on the Account.CodeHash to be set correctly when the account
+	// code is set.
 	return account.IsEmpty()
 }
 
@@ -142,7 +143,8 @@ func (s *StateDB) GetCode(addr common.Address) []byte {
 		return nil
 	}
 
-	if bytes.Equal(account.CodeHash, emptyCodeHash) {
+	// If the account has an empty codehash, there is no code.
+	if !account.IsContract() {
 		return nil
 	}
 
