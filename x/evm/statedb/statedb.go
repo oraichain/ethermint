@@ -112,7 +112,7 @@ func (s *StateDB) Empty(addr common.Address) bool {
 		return true
 	}
 
-	return account.Balance.Sign() == 0 && account.Nonce == 0 && bytes.Equal(account.CodeHash, emptyCodeHash)
+	return account.IsEmpty()
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
