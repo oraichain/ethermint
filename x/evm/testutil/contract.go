@@ -18,9 +18,11 @@ import (
 var (
 	//go:embed StateTest.json
 	stateTestContractJSON []byte
+	StateTestContract     types.CompiledContract
 
-	// StateTestContract is a compiled contract for testing state changes
-	StateTestContract types.CompiledContract
+	//go:embed EIP161Test.json
+	EIP161TestContractJSON []byte
+	EIP161TestContract     types.CompiledContract
 )
 
 func loadContract(jsonBytes []byte) types.CompiledContract {
@@ -39,6 +41,7 @@ func loadContract(jsonBytes []byte) types.CompiledContract {
 
 func init() {
 	StateTestContract = loadContract(stateTestContractJSON)
+	EIP161TestContract = loadContract(EIP161TestContractJSON)
 }
 
 // DeployContract deploys a provided contract and returns the contract address
@@ -108,6 +111,7 @@ func (suite *TestSuite) DeployContract(
 func (suite *TestSuite) CallContract(
 	contract types.CompiledContract,
 	contractAddr common.Address,
+	value *big.Int,
 	method string,
 	params ...interface{},
 ) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
@@ -119,9 +123,10 @@ func (suite *TestSuite) CallContract(
 		return nil, nil, err
 	}
 	args, err := json.Marshal(&types.TransactionArgs{
-		To:   &contractAddr,
-		From: &suite.Address,
-		Data: (*hexutil.Bytes)(&transferData),
+		To:    &contractAddr,
+		From:  &suite.Address,
+		Data:  (*hexutil.Bytes)(&transferData),
+		Value: (*hexutil.Big)(value),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -143,7 +148,7 @@ func (suite *TestSuite) CallContract(
 			chainID,
 			nonce,
 			&contractAddr,
-			nil,
+			value,
 			res.Gas,
 			nil,
 			suite.App.FeeMarketKeeper.GetBaseFee(suite.Ctx),
@@ -156,7 +161,7 @@ func (suite *TestSuite) CallContract(
 			chainID,
 			nonce,
 			&contractAddr,
-			nil,
+			value,
 			res.Gas,
 			nil,
 			nil, nil,

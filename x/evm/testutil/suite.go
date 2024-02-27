@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 	tmjson "github.com/tendermint/tendermint/libs/json"
@@ -115,7 +116,12 @@ func (suite *TestSuite) SetupAppWithT(checkTx bool, t require.TestingT) {
 		genesis[feemarkettypes.ModuleName] = app.AppCodec().MustMarshalJSON(feemarketGenesis)
 		if !suite.EnableLondonHF {
 			evmGenesis := types.DefaultGenesisState()
+
+			zeroInt := sdkmath.NewInt(0)
+			evmGenesis.Params.ChainConfig.EIP158Block = &zeroInt
+
 			maxInt := sdkmath.NewInt(math.MaxInt64)
+
 			evmGenesis.Params.ChainConfig.LondonBlock = &maxInt
 			evmGenesis.Params.ChainConfig.ArrowGlacierBlock = &maxInt
 			evmGenesis.Params.ChainConfig.GrayGlacierBlock = &maxInt
@@ -445,4 +451,21 @@ func (suite *TestSuite) GetAllAccountStorage(
 	})
 
 	return states
+}
+
+func (suite *TestSuite) MintCoinsForAccount(
+	ctx sdk.Context,
+	addr sdk.AccAddress,
+	amount sdk.Coins,
+) {
+	err := suite.App.BankKeeper.MintCoins(ctx, minttypes.ModuleName, amount)
+	suite.Require().NoError(err)
+
+	err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(
+		ctx,
+		minttypes.ModuleName,
+		addr,
+		amount,
+	)
+	suite.Require().NoError(err)
 }
