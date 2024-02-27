@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 contract EIP161Test {
-    function selfDestructTo(address target) public {
+    function selfDestructTo(address target) public payable {
         // This contract will self-destruct and send its balance to the target address
         selfdestruct(payable(target));
     }

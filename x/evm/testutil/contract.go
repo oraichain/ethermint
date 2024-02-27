@@ -4,6 +4,7 @@ import (
 	// embed compiled smart contract
 	_ "embed"
 	"encoding/json"
+	"fmt"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -137,7 +138,7 @@ func (suite *TestSuite) CallContract(
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("EstimateGas failed: %w", err)
 	}
 
 	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
@@ -173,11 +174,11 @@ func (suite *TestSuite) CallContract(
 	ercTransferTx.From = suite.Address.Hex()
 	err = ercTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed Sign: %w", err)
 	}
 	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, ercTransferTx)
 	if err != nil {
-		return nil, rsp, err
+		return nil, rsp, fmt.Errorf("failed EthereumTx: %w", err)
 	}
 
 	return ercTransferTx, rsp, nil

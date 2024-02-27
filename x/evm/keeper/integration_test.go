@@ -178,3 +178,77 @@ func (suite *IntegrationTestSuite) TestEIP161_CallGas() {
 		)
 	})
 }
+
+// Same as TestEIP161_CallGas but with self destruct
+func (suite *IntegrationTestSuite) TestEIP161_SuicideGas() {
+	suite.MintCoinsForAccount(
+		suite.Ctx,
+		sdk.AccAddress(suite.Address.Bytes()),
+		sdk.NewCoins(
+			sdk.NewCoin(types.AttoPhoton, sdk.NewInt(100000000000)),
+		),
+	)
+
+	addr := suite.DeployContract(testutil.EIP161TestContract)
+
+	// Non-existent account
+	targetAddr := common.Address{10}
+	targetAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
+	suite.Require().Nil(targetAcc, "target should not exist")
+
+	value := big.NewInt(10000)
+
+	var gasUsed1 uint64
+
+	suite.Run("suicide - non-existent destination", func() {
+		_, rsp, err := suite.CallContract(
+			testutil.EIP161TestContract,
+			addr,
+			value, // >0 value transfer
+			"selfDestructTo",
+			targetAddr,
+		)
+		suite.Require().NoError(err)
+		suite.Require().Empty(rsp.VmError)
+
+		gasUsed1 = rsp.GasUsed
+	})
+
+	// Deploy again since contract self destructed
+	addr = suite.DeployContract(testutil.EIP161TestContract)
+
+	suite.Run("suicide - existing destination", func() {
+		targetAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
+		suite.Require().NotNil(targetAcc, "target should exist")
+
+		_, rsp, err := suite.CallContract(
+			testutil.EIP161TestContract,
+			addr,
+			value, // >0 value transfer
+			"selfDestructTo",
+			targetAddr, // same target
+		)
+		suite.Require().NoError(err)
+		suite.Require().Empty(rsp.VmError)
+
+		// Check destination balances
+		targetAccAfter := suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
+		suite.Require().Equal(
+			new(big.Int).Add(targetAcc.Balance, value),
+			targetAccAfter.Balance,
+			"balance should be transferred",
+		)
+
+		// Check gas
+		suite.Require().Greater(
+			gasUsed1,
+			rsp.GasUsed,
+			"first call should use more gas - created account",
+		)
+		suite.Require().GreaterOrEqual(
+			gasUsed1,
+			rsp.GasUsed+gethparams.CallNewAccountGas,
+			"EIP-161: additional 25k gas charge for first call",
+		)
+	})
+}
