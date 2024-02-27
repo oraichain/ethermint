@@ -211,6 +211,9 @@ func (suite *IntegrationTestSuite) TestEIP161_SuicideGas() {
 		suite.Require().NoError(err)
 		suite.Require().Empty(rsp.VmError)
 
+		contractAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, addr)
+		suite.Require().Nil(contractAcc, "self destructed contract should be deleted")
+
 		gasUsed1 = rsp.GasUsed
 	})
 
@@ -230,6 +233,9 @@ func (suite *IntegrationTestSuite) TestEIP161_SuicideGas() {
 		)
 		suite.Require().NoError(err)
 		suite.Require().Empty(rsp.VmError)
+
+		contractAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, addr)
+		suite.Require().Nil(contractAcc, "self destructed contract should be deleted")
 
 		// Check destination balances
 		targetAccAfter := suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
