@@ -313,7 +313,10 @@ func (suite *TestSuite) MustTransferERC20Token(t require.TestingT, contractAddr,
 	return ercTransferTx
 }
 
-func (suite *TestSuite) TransferERC20Token(contractAddr, from, to common.Address, amount *big.Int) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
+func (suite *TestSuite) TransferERC20Token(
+	contractAddr, from, to common.Address,
+	amount *big.Int,
+) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
 	chainID := suite.App.EvmKeeper.ChainID()
 
