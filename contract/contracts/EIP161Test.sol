@@ -13,4 +13,16 @@ contract EIP161Test {
 
         return data;
     }
+
+    function createContract() public payable returns (address) {
+        address newContract;
+        bytes memory bytecode = hex"3859818153F3";
+        assembly {
+            newContract := create(0, add(bytecode, 0x20), mload(bytecode))
+            if iszero(extcodesize(newContract)) {
+                revert(0, 0)
+            }
+        }
+        return newContract;
+    }
 }

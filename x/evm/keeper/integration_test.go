@@ -134,11 +134,15 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 	var contractAddr common.Address
 	targetAddr := common.Address{10}
 
+	type accountState struct {
+		contractDeleted bool
+		targetDeleted   bool
+	}
+
 	tests := []struct {
-		name                string
-		malleate            func()
-		wantContractDeleted bool
-		wantAccountDeleted  bool
+		name             string
+		malleate         func()
+		wantAccountState accountState
 	}{
 		{
 			"not touched",
@@ -153,8 +157,10 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 				suite.Require().NoError(err)
 				suite.Require().Empty(rsp.VmError)
 			},
-			true,
-			false,
+			accountState{
+				contractDeleted: true,
+				targetDeleted:   false,
+			},
 		},
 		{
 			"self destruct target - 0 value",
@@ -170,8 +176,10 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 				suite.Require().NoError(err)
 				suite.Require().Empty(rsp.VmError)
 			},
-			true,
-			true,
+			accountState{
+				contractDeleted: true,
+				targetDeleted:   true,
+			},
 		},
 		{
 			"call target - 0 value",
@@ -187,8 +195,51 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 				suite.Require().NoError(err)
 				suite.Require().Empty(rsp.VmError)
 			},
-			false,
-			true,
+			accountState{
+				contractDeleted: false,
+				targetDeleted:   true,
+			},
+		},
+		{
+			"create call",
+			func() {
+				// target account with 0 value should be touched
+				_, rsp, err := suite.CallContract(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					"createContract",
+				)
+				suite.Require().NoError(err)
+				suite.Require().Empty(rsp.VmError)
+				suite.Require().NotEmpty(rsp.Ret)
+
+				// Get the address of the created contract
+				contractAddr = common.BytesToAddress(rsp.Ret)
+				contractAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, contractAddr)
+				suite.Require().NotNil(contractAcc)
+			},
+			accountState{
+				contractDeleted: false,
+				targetDeleted:   false,
+			},
+		},
+		{
+			"transfer zero amount",
+			func() {
+				// native transfer of 0 value funds
+				_, rsp, err := suite.TransferValue(
+					suite.Address,
+					targetAddr,
+					common.Big0,
+				)
+				suite.Require().NoError(err)
+				suite.Require().Empty(rsp.VmError)
+			},
+			accountState{
+				contractDeleted: false,
+				targetDeleted:   true,
+			},
 		},
 	}
 
@@ -212,7 +263,7 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 
 			// Check result
 			targetAcc = suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
-			if tt.wantAccountDeleted {
+			if tt.wantAccountState.targetDeleted {
 				suite.Require().Nil(
 					targetAcc,
 					"EIP-161: empty account should be deleted after being touched",
@@ -225,7 +276,7 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 			}
 
 			contractAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, contractAddr)
-			if tt.wantContractDeleted {
+			if tt.wantAccountState.contractDeleted {
 				suite.Require().Nil(
 					contractAcc,
 					"EIP-161: contract should be deleted after touching empty account",

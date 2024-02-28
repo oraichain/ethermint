@@ -386,6 +386,72 @@ func (suite *TestSuite) TransferERC20Token(
 	return ercTransferTx, rsp, nil
 }
 
+func (suite *TestSuite) TransferValue(
+	from, to common.Address,
+	amount *big.Int,
+) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
+	ctx := sdk.WrapSDKContext(suite.Ctx)
+	chainID := suite.App.EvmKeeper.ChainID()
+
+	args, err := json.Marshal(&types.TransactionArgs{
+		To:   &to,
+		From: &from,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
+		Args:            args,
+		GasCap:          25_000_000,
+		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
+
+	var nativeTransferTx *types.MsgEthereumTx
+	if suite.EnableFeemarket {
+		nativeTransferTx = types.NewTx(
+			chainID,
+			nonce,
+			&to,
+			nil,
+			res.Gas,
+			nil,
+			suite.App.FeeMarketKeeper.GetBaseFee(suite.Ctx),
+			big.NewInt(1),
+			nil,
+			&ethtypes.AccessList{}, // accesses
+		)
+	} else {
+		nativeTransferTx = types.NewTx(
+			chainID,
+			nonce,
+			&to,
+			nil,
+			res.Gas,
+			nil,
+			nil, nil,
+			nil,
+			nil,
+		)
+	}
+
+	nativeTransferTx.From = suite.Address.Hex()
+	err = nativeTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
+	if err != nil {
+		return nil, nil, err
+	}
+	rsp, err := suite.App.EvmKeeper.EthereumTx(ctx, nativeTransferTx)
+	if err != nil {
+		return nil, rsp, err
+	}
+
+	return nativeTransferTx, rsp, nil
+}
+
 // DeployTestMessageCall deploy a test erc20 contract and returns the contract address
 func (suite *TestSuite) DeployTestMessageCall(t require.TestingT) common.Address {
 	ctx := sdk.WrapSDKContext(suite.Ctx)

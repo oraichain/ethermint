@@ -260,6 +260,7 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
+	// Zero values still touch the account
 	s.TouchAccount(addr)
 
 	// Only allow positive amounts.
