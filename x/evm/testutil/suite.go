@@ -394,8 +394,9 @@ func (suite *TestSuite) TransferValue(
 	chainID := suite.App.EvmKeeper.ChainID()
 
 	args, err := json.Marshal(&types.TransactionArgs{
-		To:   &to,
-		From: &from,
+		To:    &to,
+		From:  &from,
+		Value: (*hexutil.Big)(amount),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -417,7 +418,7 @@ func (suite *TestSuite) TransferValue(
 			chainID,
 			nonce,
 			&to,
-			nil,
+			amount,
 			res.Gas,
 			nil,
 			suite.App.FeeMarketKeeper.GetBaseFee(suite.Ctx),
@@ -430,7 +431,7 @@ func (suite *TestSuite) TransferValue(
 			chainID,
 			nonce,
 			&to,
-			nil,
+			amount,
 			res.Gas,
 			nil,
 			nil, nil,
