@@ -70,6 +70,11 @@ func (s *StateDB) Keeper() Keeper {
 	return s.keeper
 }
 
+// TouchAccount marks the account as touched.
+func (s *StateDB) TouchAccount(addr common.Address) {
+	s.ephemeralStore.SetTouched(addr)
+}
+
 // AddLog adds a log, called by evm.
 func (s *StateDB) AddLog(log *ethtypes.Log) {
 	log.TxHash = s.txConfig.TxHash
@@ -255,6 +260,8 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
+	s.TouchAccount(addr)
+
 	// Only allow positive amounts.
 	// TODO: Geth apparently allows negative amounts, but can cause negative
 	// balance which is not allowed in bank keeper
@@ -272,6 +279,8 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
+	s.TouchAccount(addr)
+
 	if amount.Sign() == 0 {
 		return
 	}
@@ -286,6 +295,8 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 
 // SetNonce sets the nonce of account.
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
+	s.TouchAccount(addr)
+
 	account := s.getOrNewAccount(addr)
 
 	account.Nonce = nonce
@@ -309,6 +320,8 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
+	s.TouchAccount(addr)
+
 	// We cannot attempt to skip noop changes by just checking committed state
 	// Example:
 	// 1. With committed state to 0x0
@@ -441,6 +454,20 @@ func (s *StateDB) Commit() error {
 		// Balance is also cleared as part of Keeper.DeleteAccount
 		if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), addr); err != nil {
 			return fmt.Errorf("failed to delete suicided account: %w", err)
+		}
+	}
+
+	// EIP-161: Clear touched empty accounts, after execution of suicide list
+	touchedAddrs := s.ephemeralStore.GetAllTouched()
+	for _, addr := range touchedAddrs {
+		account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
+		// Ignore non-existent or non-empty accounts
+		if account == nil || !account.IsEmpty() {
+			continue
+		}
+
+		if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), addr); err != nil {
+			return fmt.Errorf("failed to delete empty account: %w", err)
 		}
 	}
 

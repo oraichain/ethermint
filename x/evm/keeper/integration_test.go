@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/testutil"
 	"github.com/stretchr/testify/suite"
 )
@@ -99,6 +100,173 @@ func (suite *IntegrationTestSuite) TestEIP161_CreateNonce() {
 		uint64(1),
 		contractAcc.Nonce,
 		"EIP-161: CREATE should increment nonce by 1 over default value (0)",
+	)
+}
+
+func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
+	// From EIP-161 point D:
+	// At the end of the transaction, any account touched by the execution of
+	// that transaction which is now empty SHALL instead become non-existent
+	// (i.e. deleted).
+
+	// Where:
+	// An account is considered to be touched when it is involved in any
+	// potentially state-changing operation. This includes, but is not limited
+	// to, being the recipient of a transfer of zero value.
+
+	// An account changes state when:
+	// 1) it is the target or refund of a SUICIDE operation for zero or more
+	// value;
+	// 2) it is the source or destination of a CALL operation or message-call
+	// transaction transferring zero or more value;
+	// 3) it is the source or creation of a CREATE operation or
+	// contract-creation transaction endowing zero or more value;
+
+	// Not relevant:
+	// 4) as the block author (“miner”) it is the recipient of block-rewards or
+	// transaction-fees of zero or more value.
+
+	// Some cases aren't relevant when clearing state. e.g. as an EOA
+	// sending a tx, I will never be empty as my nonce increments.
+	// Account state changes with a >0 value will also *not* clear the account
+	// as it will be non-empty with a >0 balance.
+
+	var contractAddr common.Address
+	targetAddr := common.Address{10}
+
+	tests := []struct {
+		name                string
+		malleate            func()
+		wantContractDeleted bool
+		wantAccountDeleted  bool
+	}{
+		{
+			"not touched",
+			func() {
+				_, rsp, err := suite.CallContract(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					"selfDestructTo",
+					common.Address{20}, // unrelated account
+				)
+				suite.Require().NoError(err)
+				suite.Require().Empty(rsp.VmError)
+			},
+			true,
+			false,
+		},
+		{
+			"self destruct target - 0 value",
+			func() {
+				// beneficiary account with 0 value should be touched
+				_, rsp, err := suite.CallContract(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					"selfDestructTo",
+					targetAddr,
+				)
+				suite.Require().NoError(err)
+				suite.Require().Empty(rsp.VmError)
+			},
+			true,
+			true,
+		},
+		{
+			"call target - 0 value",
+			func() {
+				// target account with 0 value should be touched
+				_, rsp, err := suite.CallContract(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					"callAccount",
+					targetAddr,
+				)
+				suite.Require().NoError(err)
+				suite.Require().Empty(rsp.VmError)
+			},
+			false,
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			// Setup test
+			// Deploy contract
+			contractAddr = suite.DeployContract(testutil.EIP161TestContract)
+
+			// Create empty account
+			acc := statedb.NewEmptyAccount()
+			err := suite.App.EvmKeeper.SetAccount(suite.Ctx, targetAddr, *acc)
+			suite.Require().NoError(err, "empty target should be created")
+
+			targetAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
+			suite.Require().NotNil(targetAcc, "empty account should exist")
+			suite.Require().True(targetAcc.IsEmpty())
+
+			// Run test specific setup
+			tt.malleate()
+
+			// Check result
+			targetAcc = suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
+			if tt.wantAccountDeleted {
+				suite.Require().Nil(
+					targetAcc,
+					"EIP-161: empty account should be deleted after being touched",
+				)
+			} else {
+				suite.Require().NotNil(
+					targetAcc,
+					"EIP-161: empty account should not be deleted if not touched",
+				)
+			}
+
+			contractAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, contractAddr)
+			if tt.wantContractDeleted {
+				suite.Require().Nil(
+					contractAcc,
+					"EIP-161: contract should be deleted after touching empty account",
+				)
+			} else {
+				suite.Require().NotNil(
+					contractAcc,
+					"EIP-161: contract should not be deleted if not touching empty account",
+				)
+			}
+		})
+	}
+}
+
+func (suite *IntegrationTestSuite) TestEIP161_CallDeletesEmpty() {
+	addr := suite.DeployContract(testutil.EIP161TestContract)
+
+	// Create an empty account in state
+	targetAddr := common.Address{10}
+	acc := statedb.NewEmptyAccount()
+
+	err := suite.App.EvmKeeper.SetAccount(suite.Ctx, targetAddr, *acc)
+	suite.Require().NoError(err, "target should be created")
+
+	targetAcc := suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
+	suite.Require().True(targetAcc.IsEmpty())
+
+	_, rsp, err := suite.CallContract(
+		testutil.EIP161TestContract,
+		addr,
+		common.Big0, // no transfer
+		"callAccount",
+		targetAddr,
+	)
+	suite.Require().NoError(err)
+	suite.Require().Empty(rsp.VmError)
+
+	targetAcc = suite.App.EvmKeeper.GetAccount(suite.Ctx, targetAddr)
+	suite.Require().Nil(
+		targetAcc,
+		"EIP-161: empty account should be deleted after being touched",
 	)
 }
 

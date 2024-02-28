@@ -7,11 +7,20 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
 
+// initialStoreRevertKey is the initial state of the store.
+var initialStoreRevertKey = StoreRevertKey{
+	RefundIndex:           0,
+	SuicidedAccountsIndex: 0,
+	LogsIndex:             0,
+	TouchedAccountsIndex:  0,
+}
+
 // StoreRevertKey defines the required information to revert to a previous state.
 type StoreRevertKey struct {
 	RefundIndex           int
 	SuicidedAccountsIndex int
 	LogsIndex             int
+	TouchedAccountsIndex  int
 }
 
 // EphemeralStore provides in-memory state of the refund and suicided accounts
@@ -20,6 +29,7 @@ type EphemeralStore struct {
 	RefundStates          []uint64
 	SuicidedAccountStates []common.Address
 	Logs                  []*ethtypes.Log
+	TouchedAccounts       []common.Address
 }
 
 // NewEphemeralStore creates a new EphemeralStore.
@@ -28,6 +38,7 @@ func NewEphemeralStore() *EphemeralStore {
 		RefundStates:          nil,
 		SuicidedAccountStates: nil,
 		Logs:                  nil,
+		TouchedAccounts:       nil,
 	}
 }
 
@@ -37,6 +48,7 @@ func (es *EphemeralStore) GetRevertKey() StoreRevertKey {
 		RefundIndex:           len(es.RefundStates),
 		SuicidedAccountsIndex: len(es.SuicidedAccountStates),
 		LogsIndex:             len(es.Logs),
+		TouchedAccountsIndex:  len(es.TouchedAccounts),
 	}
 }
 
@@ -49,28 +61,36 @@ func (es *EphemeralStore) Revert(key StoreRevertKey) {
 	es.RefundStates = es.RefundStates[:key.RefundIndex]
 	es.SuicidedAccountStates = es.SuicidedAccountStates[:key.SuicidedAccountsIndex]
 	es.Logs = es.Logs[:key.LogsIndex]
+	es.TouchedAccounts = es.TouchedAccounts[:key.TouchedAccountsIndex]
+}
+
+func validateIndex(idx int, targetLen int, name string) error {
+	if idx > targetLen {
+		return fmt.Errorf(
+			"invalid %s index, %d is greater than the length of the %s (%d)",
+			name, idx, name, targetLen,
+		)
+	}
+
+	return nil
 }
 
 func (es *EphemeralStore) ValidateRevertKey(key StoreRevertKey) error {
-	if key.RefundIndex > len(es.RefundStates) {
-		return fmt.Errorf(
-			"invalid RefundIndex, %d is greater than the length of the refund states (%d)",
-			key.RefundIndex, len(es.RefundStates),
-		)
+	validations := []struct {
+		idx    int
+		length int
+		name   string
+	}{
+		{key.RefundIndex, len(es.RefundStates), "Refund"},
+		{key.SuicidedAccountsIndex, len(es.SuicidedAccountStates), "SuicidedAccounts"},
+		{key.LogsIndex, len(es.Logs), "Logs"},
+		{key.TouchedAccountsIndex, len(es.TouchedAccounts), "TouchedAccounts"},
 	}
 
-	if key.SuicidedAccountsIndex > len(es.SuicidedAccountStates) {
-		return fmt.Errorf(
-			"invalid SuicidedAccountsIndex, %d is greater than the length of the suicided accounts (%d)",
-			key.SuicidedAccountsIndex, len(es.SuicidedAccountStates),
-		)
-	}
-
-	if key.LogsIndex > len(es.Logs) {
-		return fmt.Errorf(
-			"invalid LogsIndex, %d is greater than the length of the logs (%d)",
-			key.LogsIndex, len(es.Logs),
-		)
+	for _, v := range validations {
+		if err := validateIndex(v.idx, v.length, v.name); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -146,4 +166,33 @@ func (es *EphemeralStore) GetAccountSuicided(addr common.Address) bool {
 // GetAllSuicided returns all suicided accounts.
 func (es *EphemeralStore) GetAllSuicided() []common.Address {
 	return es.SuicidedAccountStates
+}
+
+// -----------------------------------------------------------------------------
+// Touched accounts
+
+// SetTouched sets the given account as touched.
+func (es *EphemeralStore) SetTouched(addr common.Address) {
+	// If already in the list, ignore
+	if es.IsTouched(addr) {
+		return
+	}
+
+	es.TouchedAccounts = append(es.TouchedAccounts, addr)
+}
+
+// IsTouched returns true if the given account is touched.
+func (es *EphemeralStore) IsTouched(addr common.Address) bool {
+	for _, a := range es.TouchedAccounts {
+		if a == addr {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetAllTouched returns all touched accounts.
+func (es *EphemeralStore) GetAllTouched() []common.Address {
+	return es.TouchedAccounts
 }
