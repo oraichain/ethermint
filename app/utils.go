@@ -116,7 +116,7 @@ func NewTestGenesisState(codec codec.Codec) simapp.GenesisState {
 
 	// generate genesis account
 	senderPrivKey := secp256k1.PrivKey{
-		Key: common.Hex2Bytes("6b65793a225c745c3337355c33363627365c333735476c5c3331375f5c323530305c3031375c303237375c3337365c3234315c3336355c323136247d475c3237316a3c5c3336365f785c3337353b5c3336305c3031362220"),
+		Key: common.Hex2Bytes("6b65793a225c745c3337355c33363627365c333735476c5c3331375f5c323530305c3031375c303237375c3337365c3234315c3336355c323136247d475c3237316a3c5c3336365f785c3337353b5c3336305c3031362220"), //nolint:lll
 	}
 	acc := authtypes.NewBaseAccount(senderPrivKey.PubKey().Address().Bytes(), senderPrivKey.PubKey(), 0, 0)
 	balance := banktypes.Balance{
