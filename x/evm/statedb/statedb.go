@@ -70,8 +70,8 @@ func (s *StateDB) Keeper() Keeper {
 	return s.keeper
 }
 
-// TouchAccount marks the account as touched.
-func (s *StateDB) TouchAccount(addr common.Address) {
+// touchAccount marks the account as touched.
+func (s *StateDB) touchAccount(addr common.Address) {
 	s.ephemeralStore.SetTouched(addr)
 }
 
@@ -261,7 +261,7 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 	// Zero values still touch the account
-	s.TouchAccount(addr)
+	s.touchAccount(addr)
 
 	// Only allow positive amounts.
 	// TODO: Geth apparently allows negative amounts, but can cause negative
@@ -280,7 +280,7 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
-	s.TouchAccount(addr)
+	s.touchAccount(addr)
 
 	if amount.Sign() == 0 {
 		return
@@ -296,7 +296,7 @@ func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
 
 // SetNonce sets the nonce of account.
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	s.TouchAccount(addr)
+	s.touchAccount(addr)
 
 	account := s.getOrNewAccount(addr)
 
@@ -321,7 +321,7 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	s.TouchAccount(addr)
+	s.touchAccount(addr)
 
 	// We cannot attempt to skip noop changes by just checking committed state
 	// Example:
