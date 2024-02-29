@@ -626,6 +626,44 @@ func (suite *StateDBTestSuite) TestIterateStorage() {
 	suite.Require().Equal(1, len(storage))
 }
 
+func (suite *StateDBTestSuite) TestTouchDelete_EmptyToEmpty() {
+	keeper := suite.App.EvmKeeper
+	db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
+	db.AddBalance(address, big.NewInt(0))
+
+	suite.Require().NoError(db.Commit())
+
+	acc := keeper.GetAccount(suite.Ctx, address)
+	suite.Require().Nil(acc)
+}
+
+func (suite *StateDBTestSuite) TestTouchDelete_NonEmptyToEmpty_Revert() {
+	keeper := suite.App.EvmKeeper
+	db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
+
+	// Start with a balance
+	db.AddBalance(address, big.NewInt(5))
+	suite.Require().NoError(db.Commit())
+
+	acc := keeper.GetAccount(suite.Ctx, address)
+	suite.Require().NotNil(acc)
+
+	// Start a new transaction - clears balance and makes it empty
+	db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
+	snapID := db.Snapshot()
+	db.SubBalance(address, big.NewInt(5))
+	suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
+
+	// Revert back - account should be non-empty now
+	db.RevertToSnapshot(snapID)
+	suite.Require().NoError(db.Commit())
+
+	// Check that the account is still there
+	acc = keeper.GetAccount(suite.Ctx, address)
+	suite.Require().NotNil(acc)
+	suite.Require().Equal(big.NewInt(5), acc.Balance)
+}
+
 func CollectContractStorage(db *statedb.StateDB) map[common.Hash]common.Hash {
 	storage := make(map[common.Hash]common.Hash)
 	db.ForEachStorage(address, func(k, v common.Hash) bool {
