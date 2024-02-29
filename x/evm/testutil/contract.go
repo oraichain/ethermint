@@ -116,12 +116,27 @@ func (suite *TestSuite) CallContract(
 	method string,
 	params ...interface{},
 ) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
+	res, err := suite.EstimateGas(contract, contractAddr, value, method, params...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("EstimateGas failed: %w", err)
+	}
+
+	return suite.CallContractWithGas(contract, contractAddr, value, res.Gas, method, params...)
+}
+
+// EstimateGas estimates the gas for a contract call
+func (suite *TestSuite) EstimateGas(
+	contract types.CompiledContract,
+	contractAddr common.Address,
+	value *big.Int,
+	method string,
+	params ...interface{},
+) (*types.EstimateGasResponse, error) {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
-	chainID := suite.App.EvmKeeper.ChainID()
 
 	transferData, err := contract.ABI.Pack(method, params...)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	args, err := json.Marshal(&types.TransactionArgs{
 		To:    &contractAddr,
@@ -130,15 +145,29 @@ func (suite *TestSuite) CallContract(
 		Value: (*hexutil.Big)(value),
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	res, err := suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
+	return suite.QueryClient.EstimateGas(ctx, &types.EthCallRequest{
 		Args:            args,
 		GasCap:          25_000_000,
 		ProposerAddress: suite.Ctx.BlockHeader().ProposerAddress,
 	})
+}
+
+func (suite *TestSuite) CallContractWithGas(
+	contract types.CompiledContract,
+	contractAddr common.Address,
+	value *big.Int,
+	gas uint64,
+	method string,
+	params ...interface{},
+) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
+	ctx := sdk.WrapSDKContext(suite.Ctx)
+	chainID := suite.App.EvmKeeper.ChainID()
+
+	transferData, err := contract.ABI.Pack(method, params...)
 	if err != nil {
-		return nil, nil, fmt.Errorf("EstimateGas failed: %w", err)
+		return nil, nil, err
 	}
 
 	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
@@ -150,7 +179,7 @@ func (suite *TestSuite) CallContract(
 			nonce,
 			&contractAddr,
 			value,
-			res.Gas,
+			gas,
 			nil,
 			suite.App.FeeMarketKeeper.GetBaseFee(suite.Ctx),
 			big.NewInt(1),
@@ -163,7 +192,7 @@ func (suite *TestSuite) CallContract(
 			nonce,
 			&contractAddr,
 			value,
-			res.Gas,
+			gas,
 			nil,
 			nil, nil,
 			transferData,
