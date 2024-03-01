@@ -116,16 +116,18 @@ func (suite *TestSuite) CallContract(
 	method string,
 	params ...interface{},
 ) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
-	res, err := suite.EstimateGas(contract, contractAddr, value, method, params...)
+	res, err := suite.EstimateCallGas(contract, contractAddr, value, method, params...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("EstimateGas failed: %w", err)
 	}
 
+	suite.T().Logf("estimated gas: %d", res.Gas)
+
 	return suite.CallContractWithGas(contract, contractAddr, value, res.Gas, method, params...)
 }
 
-// EstimateGas estimates the gas for a contract call
-func (suite *TestSuite) EstimateGas(
+// EstimateCallGas estimates the gas for a contract call
+func (suite *TestSuite) EstimateCallGas(
 	contract types.CompiledContract,
 	contractAddr common.Address,
 	value *big.Int,

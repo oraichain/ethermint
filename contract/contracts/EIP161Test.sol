@@ -7,11 +7,23 @@ contract EIP161Test {
         selfdestruct(payable(target));
     }
 
+    function selfDestructToRevert(address target) public payable {
+        // This contract will self-destruct and send its balance to the target address
+        selfdestruct(payable(target));
+
+        revert();
+    }
+
     function callAccount(address target) public payable returns (bytes memory) {
         (bool success, bytes memory data) = target.call{value: msg.value}("");
         require(success, "Failed to call empty account with value");
 
         return data;
+    }
+
+    function callAccountRevert(address target) public payable {
+        callAccount(target);
+        revert();
     }
 
     function createContract() public payable returns (address) {
@@ -24,5 +36,14 @@ contract EIP161Test {
             }
         }
         return newContract;
+    }
+
+    function transferValue(address target) public payable {
+        payable(target).transfer(msg.value);
+    }
+
+    function transferValueRevert(address target) public payable {
+        transferValue(target);
+        revert();
     }
 }

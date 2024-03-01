@@ -391,7 +391,6 @@ func (suite *TestSuite) TransferValue(
 	amount *big.Int,
 ) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
 	ctx := sdk.WrapSDKContext(suite.Ctx)
-	chainID := suite.App.EvmKeeper.ChainID()
 
 	args, err := json.Marshal(&types.TransactionArgs{
 		To:    &to,
@@ -410,6 +409,17 @@ func (suite *TestSuite) TransferValue(
 		return nil, nil, err
 	}
 
+	return suite.TransferValueWithGas(from, to, res.Gas, amount)
+}
+
+func (suite *TestSuite) TransferValueWithGas(
+	from, to common.Address,
+	gas uint64,
+	amount *big.Int,
+) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
+	ctx := sdk.WrapSDKContext(suite.Ctx)
+	chainID := suite.App.EvmKeeper.ChainID()
+
 	nonce := suite.App.EvmKeeper.GetNonce(suite.Ctx, suite.Address)
 
 	var nativeTransferTx *types.MsgEthereumTx
@@ -419,7 +429,7 @@ func (suite *TestSuite) TransferValue(
 			nonce,
 			&to,
 			amount,
-			res.Gas,
+			gas,
 			nil,
 			suite.App.FeeMarketKeeper.GetBaseFee(suite.Ctx),
 			big.NewInt(1),
@@ -432,7 +442,7 @@ func (suite *TestSuite) TransferValue(
 			nonce,
 			&to,
 			amount,
-			res.Gas,
+			gas,
 			nil,
 			nil, nil,
 			nil,
@@ -441,7 +451,7 @@ func (suite *TestSuite) TransferValue(
 	}
 
 	nativeTransferTx.From = suite.Address.Hex()
-	err = nativeTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
+	err := nativeTransferTx.Sign(ethtypes.LatestSignerForChainID(chainID), suite.Signer)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	gethparams "github.com/ethereum/go-ethereum/params"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -330,9 +331,10 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 			},
 		},
 		{
-			"self destruct target - 0 value",
+			"self destruct beneficiary - 0 value",
 			func() {
 				// beneficiary account with 0 value should be touched
+				// (self destruct sends the remaining funds to the beneficiary)
 				_, rsp, err := suite.CallContract(
 					testutil.EIP161TestContract,
 					contractAddr,
@@ -346,6 +348,28 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 			accountState{
 				contractDeleted: true,
 				targetDeleted:   true,
+			},
+		},
+		{
+			"REVERTED: self destruct beneficiary - 0 value",
+			func() {
+				// beneficiary account with 0 value should be touched
+				_, rsp, err := suite.CallContractWithGas(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					28211, // Enough intrinsic gas, but not enough for entire tx
+					"selfDestructToRevert",
+					targetAddr,
+				)
+				suite.T().Logf("rsp: %+v", rsp.GasUsed)
+				suite.Require().NoError(err, "revert should be in rsp, not err")
+				suite.Require().Equal(vm.ErrOutOfGas.Error(), rsp.VmError)
+			},
+			accountState{
+				// Nothing is deleted on revert
+				contractDeleted: false,
+				targetDeleted:   false,
 			},
 		},
 		{
@@ -365,6 +389,35 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 			accountState{
 				contractDeleted: false,
 				targetDeleted:   true,
+			},
+		},
+		{
+			"REVERTED: call target - 0 value",
+			func() {
+				_, err := suite.EstimateCallGas(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					"callAccountRevert",
+					targetAddr,
+				)
+				suite.Require().Error(err, "estimate gas should fail since it will revert")
+
+				_, rsp, err := suite.CallContractWithGas(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					29277, // Enough gas to cover tx
+					"callAccountRevert",
+					targetAddr,
+				)
+				suite.Require().NoError(err, "revert should be in rsp, not err")
+				suite.Require().Equal(vm.ErrExecutionReverted.Error(), rsp.VmError)
+			},
+			accountState{
+				contractDeleted: false,
+				// also reverts account deletion, so target should not be deleted
+				targetDeleted: false,
 			},
 		},
 		{
@@ -413,6 +466,29 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 				targetDeleted:   true,
 			},
 		},
+		{
+			"REVERTED: transfer zero amount",
+			func() {
+				// Transfers funds from the account -> contract -> target, then
+				// reverts after transfer.
+				// Use a custom contract method so we can easily revert the
+				// transfer after the transfer.
+				_, rsp, err := suite.CallContractWithGas(
+					testutil.EIP161TestContract,
+					contractAddr,
+					common.Big0,
+					29277, // Enough gas to cover tx - estimategas will fail due to revert
+					"transferValueRevert",
+					targetAddr,
+				)
+				suite.Require().NoError(err, "revert should be in rsp, not err")
+				suite.Require().Equal(vm.ErrExecutionReverted.Error(), rsp.VmError)
+			},
+			accountState{
+				contractDeleted: false,
+				targetDeleted:   false,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -443,7 +519,7 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 			} else {
 				suite.Require().NotNil(
 					targetAcc,
-					"EIP-161: empty account should not be deleted if not touched",
+					"EIP-161: empty account should not be deleted if not touched or reverted",
 				)
 			}
 
@@ -456,7 +532,7 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 			} else {
 				suite.Require().NotNil(
 					contractAcc,
-					"EIP-161: contract should not be deleted if not touching empty account",
+					"EIP-161: contract should not be deleted if not touching empty account or reverted",
 				)
 			}
 		})
