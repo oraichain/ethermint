@@ -727,6 +727,31 @@ func (suite *KeeperTestSuite) TestGetProposerAddress() {
 	}
 }
 
+var (
+	blockHash     common.Hash      = common.BigToHash(big.NewInt(9999))
+	emptyTxConfig statedb.TxConfig = statedb.NewEmptyTxConfig(blockHash)
+)
+
+/*
+func sortTraces(buf bytes.Buffer) {
+	// Iterate over buff by each newline
+	// module ->
+	traces := make(map[string][]string)
+
+	scanner := bufio.NewScanner(strings.NewReader(buf.String()))
+	for scanner.Scan() {
+		s := scanner.Text()
+		// parse as json
+		var lineJson interface{}
+		json.Unmarshal([]byte(s), &lineJson)
+	}
+
+	if err := scanner.Err(); err != nil {
+		panic(err)
+	}
+}
+*/
+
 func (suite *KeeperTestSuite) TestConsistency() {
 	var tracer bytes.Buffer
 	suite.App.SetCommitMultiStoreTracer(&tracer)
@@ -738,24 +763,39 @@ func (suite *KeeperTestSuite) TestConsistency() {
 		"tracer should be enabled",
 	)
 
-	contractAddr := suite.DeployTestContract(suite.T(), suite.Address, big.NewInt(100))
-	suite.Require().NotEmpty(tracer.Bytes(), "tracer should have recorded something")
+	// evm store keys prefixes:
+	// Code = 1
+	// Storage = 2
+	// addr1 := common.BigToAddress(big.NewInt(1))
+	addr2 := common.BigToAddress(big.NewInt(2))
 
-	_, _, err := suite.TransferERC20Token(contractAddr, suite.Address, common.Address{1}, big.NewInt(1000))
-	suite.Require().Error(err)
+	// Suspect: Inconsistent write orders to underlying ctx store:
+	// Journal based - sorted by addresses then inserted/deleted/etc (ascending order)
+	// - addr1 then addr2
+	// CacheCtx based - sorted by cosmos store keys which have prefixes and different orders
+	// - code then storage
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	// db.SetCode(addr1, []byte{1, 2, 3})
+	db.SetState(addr2, common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2)))
+
+	suite.Require().NoError(db.Commit())
 
 	res := suite.Commit()
+	suite.T().Logf("commitID.Hash: %x", res.Data)
+
+	// acc1 := suite.App.AccountKeeper.GetAccount(suite.Ctx, sdk.AccAddress(addr1.Bytes()))
+	// suite.Require().NotNil(acc1)
+
+	// suite.T().Logf("AccNumber: %v", acc1.GetAccountNumber())
 
 	// Log the tracer contents
 	suite.T().Logf("Tracer (%v): %s", tracer.Len(), tracer.String())
 
 	// Write tracer contents to file
-	err = os.WriteFile(fmt.Sprintf("tracer-ctx-%v.log", time.Now().Unix()), tracer.Bytes(), 0644)
+	err := os.WriteFile(fmt.Sprintf("ctx-state-%v-%x.log", time.Now().Unix(), res.Data), tracer.Bytes(), 0644)
 	suite.Require().NoError(err)
 
-	suite.T().Logf("commitID.Hash: %x", res.Data)
-
-	expectedHash := common.Hex2Bytes("10eaacd8ba1a2763c7ef1ac1090f7687baa299d2330ea1d593860a7aece3ecb5")
+	expectedHash := common.Hex2Bytes("87ade13f1a5f21f0346ce822a210caf29f22ffcc501e9969dddebf5b382f926a")
 	suite.Require().Equalf(
 		expectedHash,
 		res.Data,
@@ -763,7 +803,4 @@ func (suite *KeeperTestSuite) TestConsistency() {
 		expectedHash,
 		res.Data,
 	)
-
-	acc := suite.App.EvmKeeper.GetAccount(suite.Ctx, contractAddr)
-	suite.Require().True(acc.IsContract())
 }
