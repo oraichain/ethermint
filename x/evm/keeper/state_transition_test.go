@@ -792,7 +792,7 @@ func (suite *KeeperTestSuite) TestConsistency() {
 	suite.T().Logf("Tracer (%v): %s", tracer.Len(), tracer.String())
 
 	// Write tracer contents to file
-	err := os.WriteFile(fmt.Sprintf("ctx-state-%v-%x.log", time.Now().Unix(), res.Data), tracer.Bytes(), 0644)
+	err := os.WriteFile(fmt.Sprintf("tracer-ctx-setstate-%v-%x.log", time.Now().Unix(), res.Data), tracer.Bytes(), 0644)
 	suite.Require().NoError(err)
 
 	expectedHash := common.Hex2Bytes("87ade13f1a5f21f0346ce822a210caf29f22ffcc501e9969dddebf5b382f926a")
