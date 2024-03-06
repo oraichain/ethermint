@@ -854,8 +854,10 @@ func (suite *KeeperTestSuite) TestStateDBConsistency() {
 				vmdb.SetState(addr2, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
 			},
 		},
-		// FAILS:
 		{
+			// Fails due to different account numbers due to different SetAccount ordering
+			// Journal -> SetAccount ordered by address @ Commit() -> addr1, addr2
+			// CacheCtx -> Ordered by first SetCode/SetState call -> addr2, addr1
 			"SetState + SetCode, reverse address",
 			func(vmdb vm.StateDB) {
 				vmdb.SetCode(addr2, []byte{10})
@@ -866,9 +868,6 @@ func (suite *KeeperTestSuite) TestStateDBConsistency() {
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			var tracer bytes.Buffer
-			suite.App.SetCommitMultiStoreTracer(&tracer)
-
 			suite.SetupTest()
 			suite.Commit()
 
@@ -882,7 +881,8 @@ func (suite *KeeperTestSuite) TestStateDBConsistency() {
 			cacheNodes := suite.exportIAVLStoreNodes(suite.App.GetKey(authtypes.StoreKey))
 			cacheHashes := suite.GetStoreHashes()
 
-			// Reset state
+			// --------------------------------------------
+			// Reset state for legacy journal based StateDB
 			suite.SetupTest()
 			suite.Commit()
 
