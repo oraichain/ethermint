@@ -6,22 +6,30 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/cometbft/cometbft/crypto/tmhash"
 	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	tmtypes "github.com/cometbft/cometbft/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/store/iavl"
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/statedb_legacy"
 	"github.com/evmos/ethermint/x/evm/types"
+
+	cosmosiavl "github.com/cosmos/iavl"
 )
 
 func (suite *KeeperTestSuite) TestGetHashFn() {
@@ -803,4 +811,177 @@ func (suite *KeeperTestSuite) TestConsistency() {
 		expectedHash,
 		res.Data,
 	)
+}
+
+func (suite *KeeperTestSuite) TestStateDBConsistency() {
+	// evm store keys prefixes:
+	// Code = 1
+	// Storage = 2
+	addr1 := common.BigToAddress(big.NewInt(1))
+	addr2 := common.BigToAddress(big.NewInt(2))
+
+	tests := []struct {
+		name    string
+		maleate func(vmdb vm.StateDB)
+	}{
+		{
+			"noop",
+			func(vmdb vm.StateDB) {
+			},
+		},
+		{
+			"SetState",
+			func(vmdb vm.StateDB) {
+				vmdb.SetState(addr2, common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2)))
+			},
+		},
+		{
+			"SetCode",
+			func(vmdb vm.StateDB) {
+				vmdb.SetCode(addr2, []byte{1, 2, 3})
+			},
+		},
+		{
+			"SetState",
+			func(vmdb vm.StateDB) {
+				vmdb.SetState(addr2, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
+			},
+		},
+		{
+			"SetState + SetCode",
+			func(vmdb vm.StateDB) {
+				vmdb.SetCode(addr1, []byte{10})
+				vmdb.SetState(addr2, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
+			},
+		},
+		// FAILS:
+		{
+			"SetState + SetCode, reverse address",
+			func(vmdb vm.StateDB) {
+				vmdb.SetCode(addr2, []byte{10})
+				vmdb.SetState(addr1, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			var tracer bytes.Buffer
+			suite.App.SetCommitMultiStoreTracer(&tracer)
+
+			suite.SetupTest()
+			suite.Commit()
+
+			// Cache CTX statedb
+			ctxDB := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			tt.maleate(ctxDB)
+			suite.Require().NoError(ctxDB.Commit())
+
+			newRes := suite.Commit()
+
+			cacheNodes := suite.exportIAVLStoreNodes(suite.App.GetKey(authtypes.StoreKey))
+			cacheHashes := suite.GetStoreHashes()
+
+			// Reset state
+			suite.SetupTest()
+			suite.Commit()
+
+			legacyDB := statedb_legacy.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			tt.maleate(legacyDB)
+			suite.Require().NoError(legacyDB.Commit())
+
+			legacyRes := suite.Commit()
+
+			suite.T().Logf("newRes: %x", newRes.Data)
+			suite.T().Logf("legacyRes: %x", legacyRes.Data)
+
+			suite.Equalf(
+				common.Bytes2Hex(newRes.Data),
+				common.Bytes2Hex(legacyRes.Data),
+				"commitID.Hash should match between statedb versions, old %x, new %x",
+				legacyRes.Data,
+				newRes.Data,
+			)
+
+			// Don't log any additional info if the test passed
+			if !suite.T().Failed() {
+				return
+			}
+
+			journalNodes := suite.exportIAVLStoreNodes(suite.App.GetKey(authtypes.StoreKey))
+			journalHashes := suite.GetStoreHashes()
+
+			suite.Equal(cacheHashes, journalHashes)
+
+			fmt.Printf("----------------------------------------\n")
+			fmt.Printf("CTX NODES:\n")
+			fmt.Printf("%v\n\n", cacheNodes)
+			fmt.Printf("----------------------------------------\n")
+			fmt.Printf("JOURNAL NODES:\n")
+			fmt.Printf("%v\n\n", journalNodes)
+		})
+	}
+}
+
+// GetStoreHashes returns the IAVL hashes of all the stores in the multistore
+func (suite *KeeperTestSuite) GetStoreHashes() map[string]string {
+	cms := suite.App.CommitMultiStore()
+	storeKeys := suite.App.GetKeys()
+	storeHashes := make(map[string]string)
+
+	for _, key := range storeKeys {
+		store := cms.GetStore(key)
+		iavlStore := store.(*iavl.Store)
+		storeHashes[key.Name()] = common.Bytes2Hex(iavlStore.LastCommitID().Hash)
+	}
+
+	return storeHashes
+}
+
+func (suite *KeeperTestSuite) exportIAVLStoreNodes(
+	storeKey *storetypes.KVStoreKey,
+) string {
+	cms := suite.App.CommitMultiStore()
+	store := cms.GetStore(storeKey)
+	authIavlStore := store.(*iavl.Store)
+
+	lastVersion := authIavlStore.LastCommitID().Version
+
+	exporter, err := authIavlStore.Export(lastVersion)
+	suite.Require().NoError(err)
+	defer exporter.Close()
+
+	nodes := []*cosmosiavl.ExportNode{}
+	for {
+		node, err := exporter.Next()
+		if err != nil || node == nil {
+			break
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	s := ""
+	s += fmt.Sprintf("%v store nodes @ version %v\n", len(nodes), lastVersion)
+
+	for _, node := range nodes {
+		indent := strings.Repeat(" ", int(node.Height))
+
+		valueStr := fmt.Sprintf("%x", node.Value)
+
+		if len(node.Value) == 0 {
+			valueStr = "nil"
+		}
+
+		s += fmt.Sprintf(
+			"%v[%v-%v] %x -> %s\n",
+			indent,
+			node.Height,
+			node.Version,
+			node.Key,
+			valueStr,
+		)
+	}
+
+	return s
 }
