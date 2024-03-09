@@ -307,6 +307,11 @@ func (s *StateDB) SetCode(addr common.Address, code []byte) {
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
+	acc := s.getOrNewAccount(addr)
+	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *acc); err != nil {
+		s.SetError(fmt.Errorf("failed to set account for state: %w", err))
+	}
+
 	// We cannot attempt to skip noop changes by just checking committed state
 	// Example:
 	// 1. With committed state to 0x0

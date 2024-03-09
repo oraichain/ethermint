@@ -737,26 +737,6 @@ var (
 	emptyTxConfig statedb.TxConfig = statedb.NewEmptyTxConfig(blockHash)
 )
 
-/*
-func sortTraces(buf bytes.Buffer) {
-	// Iterate over buff by each newline
-	// module ->
-	traces := make(map[string][]string)
-
-	scanner := bufio.NewScanner(strings.NewReader(buf.String()))
-	for scanner.Scan() {
-		s := scanner.Text()
-		// parse as json
-		var lineJson interface{}
-		json.Unmarshal([]byte(s), &lineJson)
-	}
-
-	if err := scanner.Err(); err != nil {
-		panic(err)
-	}
-}
-*/
-
 func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 	suite.T().Skip("CacheCtx StateDB does not currently skip noop state changes")
 
@@ -868,17 +848,6 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 				vmdb.SetState(addr1, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
 			},
 			true,
-		},
-		{
-			"hmm",
-			func(vmdb vm.StateDB) {
-				vmdb.SetState(addr1, common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2)))
-				suite.Require().NoError(vmdb.(*statedb.StateDB).Commit())
-				suite.Commit()
-
-				vmdb.SetState(addr1, common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2)))
-			},
-			false,
 		},
 	}
 
