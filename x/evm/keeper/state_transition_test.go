@@ -738,7 +738,7 @@ var (
 )
 
 func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
-	suite.T().Skip("CacheCtx StateDB does not currently skip noop state changes")
+	// suite.T().Skip("CacheCtx StateDB does not currently skip noop state changes")
 
 	// On StateDB.Commit(), if there is a dirty state change that matches the
 	// committed state, it should be skipped. Only state changes that are
@@ -761,34 +761,87 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 	key := common.BigToHash(big.NewInt(10))
 	value := common.BigToHash(big.NewInt(20))
 
-	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-	db.SetState(addr, key, value)
-	suite.Require().NoError(db.Commit())
+	tests := []struct {
+		name            string
+		initializeState func(vmdb vm.StateDB)
+		maleate         func(vmdb vm.StateDB)
+	}{
+		{
+			"SetState - key/value same as committed",
+			func(vmdb vm.StateDB) {
+				vmdb.SetState(addr, key, value)
+			},
+			func(vmdb vm.StateDB) {
+				vmdb.SetState(addr, key, value)
+			},
+		},
+		{
+			"SetState - multiple snapshots, same value",
+			func(vmdb vm.StateDB) {
+				vmdb.SetState(addr, key, value)
+			},
+			func(vmdb vm.StateDB) {
+				// A -> A
+				vmdb.SetState(addr, key, value)
 
-	suite.Commit()
+				// Same value, just different snapshot. Should be skipped in all
+				// snapshots.
+				_ = vmdb.Snapshot()
+				vmdb.SetState(addr, key, value)
+			},
+		},
+		{
+			"SetState - multiple snapshots, different value",
+			func(vmdb vm.StateDB) {
+				vmdb.SetState(addr, key, value)
+			},
+			func(vmdb vm.StateDB) {
+				// A -> B -> A
 
-	store := suite.App.CommitMultiStore().GetStore(suite.App.GetKey(types.StoreKey))
-	iavlStore := store.(*iavl.Store)
-	commitID1 := iavlStore.LastCommitID()
+				// Different value in 1st snapshot
+				value2 := common.BigToHash(big.NewInt(30))
+				vmdb.SetState(addr, key, value2)
 
-	// Set the same state again
-	db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-	db.SetState(addr, key, value)
-	suite.Require().NoError(db.Commit())
+				// Back to original value in 2nd snapshot
+				_ = vmdb.Snapshot()
+				vmdb.SetState(addr, key, value)
+			},
+		},
+	}
 
-	suite.Commit()
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			tt.initializeState(db)
 
-	commitID2 := iavlStore.LastCommitID()
+			suite.Require().NoError(db.Commit())
+			suite.Commit()
 
-	// We can compare the commitIDs since this is *only* the x/evm store which
-	// doesn't change between blocks without state changes. Any version change,
-	// e.g. no-op change that was written when it shouldn't, will modify the
-	// hash.
-	suite.Require().Equal(
-		common.Bytes2Hex(commitID1.Hash),
-		common.Bytes2Hex(commitID2.Hash),
-		"evm store should be unchanged",
-	)
+			store := suite.App.CommitMultiStore().GetStore(suite.App.GetKey(types.StoreKey))
+			iavlStore := store.(*iavl.Store)
+			commitID1 := iavlStore.LastCommitID()
+
+			// New statedb that should not modify the underlying store
+			db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			tt.maleate(db)
+
+			suite.Require().NoError(db.Commit())
+			suite.Commit()
+
+			commitID2 := iavlStore.LastCommitID()
+
+			// We can compare the commitIDs since this is *only* the x/evm store which
+			// doesn't change between blocks without state changes. Any version change,
+			// e.g. no-op change that was written when it shouldn't, will modify the
+			// hash.
+			suite.Require().Equal(
+				common.Bytes2Hex(commitID1.Hash),
+				common.Bytes2Hex(commitID2.Hash),
+				"evm store should be unchanged",
+			)
+
+		})
+	}
 }
 
 func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
