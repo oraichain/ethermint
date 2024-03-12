@@ -22,6 +22,8 @@ import (
 	sdkmath "cosmossdk.io/math"
 
 	errorsmod "cosmossdk.io/errors"
+	"github.com/cosmos/cosmos-sdk/store/cachekv"
+	"github.com/cosmos/cosmos-sdk/store/gaskv"
 	"github.com/cosmos/cosmos-sdk/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -184,6 +186,35 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key, value commo
 		"ethereum-address", addr.Hex(),
 		"key", key.Hex(),
 	)
+}
+
+func (k *Keeper) UnsetState(ctx sdk.Context, addr common.Address, key common.Hash) error {
+	ctxStore := ctx.KVStore(k.storeKey)
+	gasKVStore, ok := ctxStore.(*gaskv.Store)
+	if !ok {
+		return fmt.Errorf("expected gaskv.Store, got %T", ctxStore)
+	}
+
+	// Use parent of store and try as cachekv.Store
+	ctxStore = gasKVStore.GetParent()
+
+	cacheKVStore, ok := ctxStore.(*cachekv.Store)
+	if !ok {
+		return fmt.Errorf("expected cachekv.Store, got %T", ctxStore)
+	}
+
+	storeKey := types.AddressStoragePrefix(addr)
+	storeKey = append(storeKey, key.Bytes()...)
+
+	cacheKVStore.Unset(storeKey)
+
+	k.Logger(ctx).Debug(
+		"state unset",
+		"ethereum-address", addr.Hex(),
+		"key", key.Hex(),
+	)
+
+	return nil
 }
 
 // SetCode set contract code, delete if code is empty.
