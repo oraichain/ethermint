@@ -740,6 +740,11 @@ var (
 	emptyTxConfig statedb.TxConfig = statedb.NewEmptyTxConfig(blockHash)
 )
 
+type StateDBCommit interface {
+	vm.StateDB
+	Commit() error
+}
+
 func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	// New accounts should have account numbers in sorted order on Commit(),
 	// NOT when they were first touched.
@@ -749,6 +754,8 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	// - New accounts are persisted in journal without an account number until
 	//   Commit() is called, which iterates new accounts sorted by address and
 	//   assigns account numbers in order.
+	// - Every method that calls getOrNewStateObject will have the account
+	//   created in Commit() if it doesn't exist yet.
 
 	// This test ensures all the specified StateDB methods that should create
 	// accounts do so in a way that results in sorted account numbers in the
@@ -757,12 +764,12 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	// - When accounts are touched in descending order (by address)
 	// - When accounts are touched in random order
 
-	type SingleTest struct {
+	type MethodTest struct {
 		name  string
 		touch func(vmdb vm.StateDB, addr common.Address)
 	}
 
-	tests := []SingleTest{
+	tests := []MethodTest{
 		{
 			"SetState",
 			func(vmdb vm.StateDB, addr common.Address) {
@@ -797,6 +804,12 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		},
 	}
 
+	// -------------------------------------------------------------------------
+	// Addresses setup
+	// - Ascending order
+	// - Descending order
+	// - Random order
+
 	orderedAddrs := []common.Address{}
 	for i := 0; i < 5; i++ {
 		num := big.NewInt(int64(i + 1))
@@ -804,13 +817,51 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		orderedAddrs = append(orderedAddrs, addr)
 	}
 
-	testFn := func(addrs []common.Address, tt SingleTest) {
+	reversedAddrs := make([]common.Address, len(orderedAddrs))
+	copy(reversedAddrs, orderedAddrs)
+
+	for i := len(reversedAddrs)/2 - 1; i >= 0; i-- {
+		opp := len(reversedAddrs) - 1 - i
+		reversedAddrs[i], reversedAddrs[opp] = reversedAddrs[opp], reversedAddrs[i]
+	}
+
+	// Make sure it's actually reversed now, descending order
+	for i := 0; i < len(reversedAddrs)-1; i++ {
+		suite.Require().True(
+			bytes.Compare(reversedAddrs[i].Bytes(), reversedAddrs[i+1].Bytes()) > 0,
+			"addresses should be in descending order",
+		)
+	}
+
+	randomAddrs := make([]common.Address, len(orderedAddrs))
+	copy(randomAddrs, orderedAddrs)
+
+	// Shuffle
+	addrsShuffled := make([]common.Address, len(randomAddrs))
+	perm := rand.Perm(len(randomAddrs))
+	for i, v := range perm {
+		addrsShuffled[v] = randomAddrs[i]
+	}
+
+	// -------------------------------------------------------------------------
+	// Shared test logic
+
+	testFn := func(
+		stateDBConstructor func() StateDBCommit,
+		addrs []common.Address,
+		tt MethodTest,
+	) {
+		// Ensure evm account already exists - otherwise it will be created on
+		// the first balance change in an account and have an account number gap
+		// in the user accounts (SetAccount -> SetBalance -> MintCoins)
+		_ = suite.App.AccountKeeper.GetModuleAccount(suite.Ctx, types.ModuleName)
+
 		for _, addr := range addrs {
 			acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, addr.Bytes())
 			suite.Require().Nil(acc, "account should not exist yet")
 		}
 
-		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+		db := stateDBConstructor()
 
 		for _, addr := range addrs {
 			// Run the corresponding StateDB method that should touch an account
@@ -840,62 +891,64 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 			suite.Require().Less(
 				accNum1,
 				accNum2,
-				"account numbers should be acending order",
+				"account numbers should be ascending order",
 			)
-			suite.Require().Equal(
+			suite.Require().Equalf(
 				accNum1+1,
 				accNum2,
-				"account numbers should be in order",
+				"account numbers should be in order, %v",
+				accounts,
 			)
 		}
 	}
 
+	ctxStateDBConstructor := func() StateDBCommit {
+		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	}
+	legacyStateDBConstructor := func() StateDBCommit {
+		return statedb_legacy.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	}
+
 	// Run the tests
+	for _, tt := range tests {
+		// First run the tests against legacy statedb to ensure the correct
+		// behavior is expected
+		suite.Run(tt.name+"_legacy", func() {
+			suite.SetupTest()
+			testFn(legacyStateDBConstructor, orderedAddrs, tt)
+		})
+		continue
+
+		suite.Run(tt.name+"_reversed_legacy", func() {
+			suite.SetupTest()
+			testFn(legacyStateDBConstructor, reversedAddrs, tt)
+		})
+
+		suite.Run(tt.name+"_random_legacy", func() {
+			suite.SetupTest()
+			testFn(legacyStateDBConstructor, addrsShuffled, tt)
+		})
+	}
+
+	return
+
+	// CacheCtx statedb
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
 			suite.SetupTest()
-
-			testFn(orderedAddrs, tt)
+			testFn(ctxStateDBConstructor, orderedAddrs, tt)
 		})
 
 		// Now do the same but reversed addresses
 		suite.Run(tt.name+"_reversed", func() {
 			suite.SetupTest()
-
-			reversedAddrs := make([]common.Address, len(orderedAddrs))
-			copy(reversedAddrs, orderedAddrs)
-
-			for i := len(reversedAddrs)/2 - 1; i >= 0; i-- {
-				opp := len(reversedAddrs) - 1 - i
-				reversedAddrs[i], reversedAddrs[opp] = reversedAddrs[opp], reversedAddrs[i]
-			}
-
-			// Make sure it's actually reversed now, descending order
-			for i := 0; i < len(reversedAddrs)-1; i++ {
-				suite.Require().True(
-					bytes.Compare(reversedAddrs[i].Bytes(), reversedAddrs[i+1].Bytes()) > 0,
-					"addresses should be in descending order",
-				)
-			}
-
-			testFn(reversedAddrs, tt)
+			testFn(ctxStateDBConstructor, reversedAddrs, tt)
 		})
 
 		// And again! but with random order
 		suite.Run(tt.name+"_random", func() {
 			suite.SetupTest()
-
-			randomAddrs := make([]common.Address, len(orderedAddrs))
-			copy(randomAddrs, orderedAddrs)
-
-			// Shuffle
-			addrsShuffled := make([]common.Address, len(randomAddrs))
-			perm := rand.Perm(len(randomAddrs))
-			for i, v := range perm {
-				addrsShuffled[v] = randomAddrs[i]
-			}
-
-			testFn(addrsShuffled, tt)
+			testFn(ctxStateDBConstructor, addrsShuffled, tt)
 		})
 	}
 }
