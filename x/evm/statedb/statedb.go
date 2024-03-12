@@ -253,12 +253,9 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	// Only allow positive amounts.
-	// TODO: Geth apparently allows negative amounts, but can cause negative
-	// balance which is not allowed in bank keeper
-	if amount.Sign() != 1 {
-		return
-	}
+	// Geth apparently allows negative amounts, but can cause negative
+	// balance which is not allowed in bank keeper. However, we need to create
+	// the account still.
 
 	account := s.getOrNewAccount(addr)
 
@@ -321,6 +318,9 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 	//
 	// End result: 0x0, but we cannot skip step 3 or it will be incorrectly 0x1
 	s.keeper.SetState(s.ctx.CurrentCtx(), addr, key, value)
+
+	// Keep track of the key that had a state change
+	s.ephemeralStore.AddContractStateKey(addr, key)
 }
 
 // Suicide marks the given account as suicided.
@@ -444,6 +444,34 @@ func (s *StateDB) Commit() error {
 		// Balance is also cleared as part of Keeper.DeleteAccount
 		if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), addr); err != nil {
 			return fmt.Errorf("failed to delete suicided account: %w", err)
+		}
+	}
+
+	// Check for any state no-op changes and skip committing
+	for _, change := range s.ephemeralStore.GetContractStateKeys() {
+		committedValue := s.keeper.GetState(s.ctx.initialCtx, change.Addr, change.Key)
+		dirtyValue := s.keeper.GetState(s.ctx.CurrentCtx(), change.Addr, change.Key)
+
+		// Different committed and dirty value, so we need to commit
+		if committedValue != dirtyValue {
+			continue
+		}
+
+		// Remove no-op change from ALL snapshot contexts to prevent writing it
+		// to the store. This is necessary since the same key/value will still
+		// update the internal IAVL node version and thus the hash.
+
+		// We can't just remove it from the latest snapshot context, since all
+		// snapshots are written to the store. A snapshot in the "middle" may
+		// contain a state change that isn't just a no-op change but a
+		// completely different value.
+		// Example: A -(snapshot)-> B -(snapshot)-> A
+		// -> We need to remove BOTH the B -> A change and the A -> B change,
+		//    otherwise B will be written to the store.
+		for _, snapshot := range s.ctx.snapshots {
+			if err := s.keeper.UnsetState(snapshot.ctx, change.Addr, change.Key); err != nil {
+				return err
+			}
 		}
 	}
 
