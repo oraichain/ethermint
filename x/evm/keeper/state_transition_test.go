@@ -805,7 +805,7 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	}
 
 	// -------------------------------------------------------------------------
-	// Addresses setup
+	// Addresses setup -> All of these should have the same account numbers
 	// - Ascending order
 	// - Descending order
 	// - Random order
@@ -851,6 +851,9 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		addrs []common.Address,
 		tt MethodTest,
 	) {
+		// Reset app state
+		suite.SetupTest()
+
 		// Ensure evm account already exists - otherwise it will be created on
 		// the first balance change in an account and have an account number gap
 		// in the user accounts (SetAccount -> SetBalance -> MintCoins)
@@ -914,18 +917,14 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		// First run the tests against legacy statedb to ensure the correct
 		// behavior is expected
 		suite.Run(tt.name+"_legacy", func() {
-			suite.SetupTest()
 			testFn(legacyStateDBConstructor, orderedAddrs, tt)
 		})
-		continue
 
 		suite.Run(tt.name+"_reversed_legacy", func() {
-			suite.SetupTest()
 			testFn(legacyStateDBConstructor, reversedAddrs, tt)
 		})
 
 		suite.Run(tt.name+"_random_legacy", func() {
-			suite.SetupTest()
 			testFn(legacyStateDBConstructor, addrsShuffled, tt)
 		})
 	}
@@ -935,19 +934,16 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	// CacheCtx statedb
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
-			suite.SetupTest()
 			testFn(ctxStateDBConstructor, orderedAddrs, tt)
 		})
 
 		// Now do the same but reversed addresses
 		suite.Run(tt.name+"_reversed", func() {
-			suite.SetupTest()
 			testFn(ctxStateDBConstructor, reversedAddrs, tt)
 		})
 
 		// And again! but with random order
 		suite.Run(tt.name+"_random", func() {
-			suite.SetupTest()
 			testFn(ctxStateDBConstructor, addrsShuffled, tt)
 		})
 	}
