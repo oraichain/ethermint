@@ -1,9 +1,12 @@
 package keeper_test
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"math/big"
+	"math/rand"
+	"sort"
 	"strings"
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -737,6 +740,166 @@ var (
 	emptyTxConfig statedb.TxConfig = statedb.NewEmptyTxConfig(blockHash)
 )
 
+func (suite *KeeperTestSuite) TestAccountNumberOrder() {
+	// New accounts should have account numbers in sorted order on Commit(),
+	// NOT when they were first touched.
+
+	// Relevant journal based StateDB code:
+	// https://github.com/Kava-Labs/ethermint/blob/877e8fd1bd140c37ad05ed613f31e28f0130c0c4/x/evm/statedb/statedb.go#L464-L466
+	// - New accounts are persisted in journal without an account number until
+	//   Commit() is called, which iterates new accounts sorted by address and
+	//   assigns account numbers in order.
+
+	// This test ensures all the specified StateDB methods that should create
+	// accounts do so in a way that results in sorted account numbers in the
+	// following cases:
+	// - When accounts are touched in ascending order (by address)
+	// - When accounts are touched in descending order (by address)
+	// - When accounts are touched in random order
+
+	type SingleTest struct {
+		name  string
+		touch func(vmdb vm.StateDB, addr common.Address)
+	}
+
+	tests := []SingleTest{
+		{
+			"SetState",
+			func(vmdb vm.StateDB, addr common.Address) {
+				key := common.BytesToHash([]byte{1})
+				value := common.BytesToHash([]byte{1})
+				vmdb.SetState(addr, key, value)
+			},
+		},
+		{
+			"SetCode",
+			func(vmdb vm.StateDB, addr common.Address) {
+				vmdb.SetCode(addr, []byte{1})
+			},
+		},
+		{
+			"SetNonce",
+			func(vmdb vm.StateDB, addr common.Address) {
+				vmdb.SetNonce(addr, 2)
+			},
+		},
+		{
+			"AddBalance",
+			func(vmdb vm.StateDB, addr common.Address) {
+				vmdb.AddBalance(addr, big.NewInt(5))
+			},
+		},
+		{
+			"SubBalance",
+			func(vmdb vm.StateDB, addr common.Address) {
+				vmdb.SubBalance(addr, big.NewInt(0))
+			},
+		},
+	}
+
+	orderedAddrs := []common.Address{}
+	for i := 0; i < 5; i++ {
+		num := big.NewInt(int64(i + 1))
+		addr := common.BigToAddress(num)
+		orderedAddrs = append(orderedAddrs, addr)
+	}
+
+	testFn := func(addrs []common.Address, tt SingleTest) {
+		for _, addr := range addrs {
+			acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, addr.Bytes())
+			suite.Require().Nil(acc, "account should not exist yet")
+		}
+
+		db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+
+		for _, addr := range addrs {
+			// Run the corresponding StateDB method that should touch an account
+			tt.touch(db, addr)
+		}
+
+		suite.Require().NoError(db.Commit())
+		suite.Commit()
+
+		// Check account numbers
+		accounts := make([]authtypes.AccountI, len(addrs))
+		for i, addr := range addrs {
+			acc := suite.App.AccountKeeper.GetAccount(suite.Ctx, addr.Bytes())
+			suite.Require().NotNil(acc, "account should exist")
+			accounts[i] = acc
+		}
+
+		sort.Slice(accounts, func(i, j int) bool {
+			return bytes.Compare(accounts[i].GetAddress().Bytes(), accounts[j].GetAddress().Bytes()) < 0
+		})
+
+		// Ensure account numbers are in order
+		for i := 0; i < len(accounts)-1; i++ {
+			accNum1 := accounts[i].GetAccountNumber()
+			accNum2 := accounts[i+1].GetAccountNumber()
+
+			suite.Require().Less(
+				accNum1,
+				accNum2,
+				"account numbers should be acending order",
+			)
+			suite.Require().Equal(
+				accNum1+1,
+				accNum2,
+				"account numbers should be in order",
+			)
+		}
+	}
+
+	// Run the tests
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			suite.SetupTest()
+
+			testFn(orderedAddrs, tt)
+		})
+
+		// Now do the same but reversed addresses
+		suite.Run(tt.name+"_reversed", func() {
+			suite.SetupTest()
+
+			reversedAddrs := make([]common.Address, len(orderedAddrs))
+			copy(reversedAddrs, orderedAddrs)
+
+			for i := len(reversedAddrs)/2 - 1; i >= 0; i-- {
+				opp := len(reversedAddrs) - 1 - i
+				reversedAddrs[i], reversedAddrs[opp] = reversedAddrs[opp], reversedAddrs[i]
+			}
+
+			// Make sure it's actually reversed now, descending order
+			for i := 0; i < len(reversedAddrs)-1; i++ {
+				suite.Require().True(
+					bytes.Compare(reversedAddrs[i].Bytes(), reversedAddrs[i+1].Bytes()) > 0,
+					"addresses should be in descending order",
+				)
+			}
+
+			testFn(reversedAddrs, tt)
+		})
+
+		// And again! but with random order
+		suite.Run(tt.name+"_random", func() {
+			suite.SetupTest()
+
+			randomAddrs := make([]common.Address, len(orderedAddrs))
+			copy(randomAddrs, orderedAddrs)
+
+			// Shuffle
+			addrsShuffled := make([]common.Address, len(randomAddrs))
+			perm := rand.Perm(len(randomAddrs))
+			for i, v := range perm {
+				addrsShuffled[v] = randomAddrs[i]
+			}
+
+			testFn(addrsShuffled, tt)
+		})
+	}
+}
+
 func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 	// suite.T().Skip("CacheCtx StateDB does not currently skip noop state changes")
 
@@ -767,7 +930,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 		maleate         func(vmdb vm.StateDB)
 	}{
 		{
-			"SetState - key/value same as committed",
+			"SetState - no extra snapshots",
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr, key, value)
 			},
@@ -776,7 +939,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			},
 		},
 		{
-			"SetState - multiple snapshots, same value",
+			"SetState - 2nd snapshot, same value",
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr, key, value)
 			},
@@ -791,7 +954,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			},
 		},
 		{
-			"SetState - multiple snapshots, different value",
+			"SetState - 2nd snapshot, different value",
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr, key, value)
 			},
@@ -807,10 +970,38 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 				vmdb.SetState(addr, key, value)
 			},
 		},
+		{
+			"SetState - multiple snapshots, different value",
+			func(vmdb vm.StateDB) {
+				vmdb.SetState(addr, key, value)
+			},
+			func(vmdb vm.StateDB) {
+				// A -> B -> C -> A
+
+				// Different value in 1st snapshot
+				value2 := common.BigToHash(big.NewInt(30))
+				value3 := common.BigToHash(big.NewInt(40))
+				_ = vmdb.Snapshot()
+				vmdb.SetState(addr, key, value2)
+
+				// Extra empty snapshot for good measure
+				_ = vmdb.Snapshot()
+
+				_ = vmdb.Snapshot()
+				vmdb.SetState(addr, key, value3)
+
+				// Back to original value in last snapshot
+				_ = vmdb.Snapshot()
+				vmdb.SetState(addr, key, value)
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
+			// reset
+			suite.SetupTest()
+
 			db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.initializeState(db)
 
