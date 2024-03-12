@@ -929,7 +929,7 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		})
 	}
 
-	return
+	suite.T().Skip("CacheCtx StateDB does not currently support account number ordering")
 
 	// CacheCtx statedb
 	for _, tt := range tests {
