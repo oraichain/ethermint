@@ -267,10 +267,10 @@ func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
-	if amount.Sign() == 0 {
-		return
-	}
-
+	// Avoid returning on 0 value to allow for account to be created still.
+	// This should be a non-issue if state clearing is implemented, as if there
+	// is an non-existent account and 0 balance is added, an account isn't
+	// created.
 	account := s.getOrNewAccount(addr)
 
 	account.Balance = new(big.Int).Sub(account.Balance, amount)
