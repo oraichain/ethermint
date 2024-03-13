@@ -171,11 +171,16 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 	return nil
 }
 
+// ReassignAccountNumbers reassign account numbers for the given addresses,
+// ensuring they are incrementing in order by address and that there are no
+// account number gaps, e.g. Accounts that have been created in side effects
+// during a transaction and not passed to this method.
 func (k *Keeper) ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address) error {
 	if len(addrs) == 0 {
 		return nil
 	}
 
+	// Get all the accounts
 	accounts := make([]authtypes.AccountI, len(addrs))
 	for i, addr := range addrs {
 		cosmosAddr := sdk.AccAddress(addr.Bytes())
@@ -192,9 +197,10 @@ func (k *Keeper) ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address)
 		return accounts[i].GetAccountNumber() < accounts[j].GetAccountNumber()
 	})
 
+	// Min account number as start
 	accountNumberStart := accounts[0].GetAccountNumber()
 
-	// Ensure there are no number gaps
+	// Ensure there are no gaps in account numbers
 	for i, acct := range accounts {
 		if acct.GetAccountNumber() != accountNumberStart+uint64(i) {
 			return fmt.Errorf(
@@ -209,7 +215,7 @@ func (k *Keeper) ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address)
 		return bytes.Compare(accounts[i].GetAddress(), accounts[j].GetAddress()) < 0
 	})
 
-	// Reassign account numbers
+	// Reassign account numbers in order of account address
 	for i, acct := range accounts {
 		ethAcct, ok := acct.(ethermint.EthAccountI)
 		if !ok {
