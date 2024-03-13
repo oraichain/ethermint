@@ -897,10 +897,11 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 			accNum1 := accounts[i].GetAccountNumber()
 			accNum2 := accounts[i+1].GetAccountNumber()
 
-			suite.Require().Less(
+			suite.Require().Lessf(
 				accNum1,
 				accNum2,
-				"account numbers should be ascending order",
+				"account numbers should be ascending order, %v",
+				accounts,
 			)
 			suite.Require().Equalf(
 				accNum1+1,
@@ -1086,7 +1087,40 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 				common.Bytes2Hex(commitID2.Hash),
 				"evm store should be unchanged",
 			)
+		})
 
+		suite.Run(tt.name+"_legacy", func() {
+			// reset
+			suite.SetupTest()
+
+			db := legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			tt.initializeState(db)
+
+			suite.Require().NoError(db.Commit())
+			suite.Commit()
+
+			store := suite.App.CommitMultiStore().GetStore(suite.App.GetKey(types.StoreKey))
+			iavlStore := store.(*iavl.Store)
+			commitID1 := iavlStore.LastCommitID()
+
+			// New statedb that should not modify the underlying store
+			db = legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			tt.maleate(db)
+
+			suite.Require().NoError(db.Commit())
+			suite.Commit()
+
+			commitID2 := iavlStore.LastCommitID()
+
+			// We can compare the commitIDs since this is *only* the x/evm store which
+			// doesn't change between blocks without state changes. Any version change,
+			// e.g. no-op change that was written when it shouldn't, will modify the
+			// hash.
+			suite.Require().Equal(
+				common.Bytes2Hex(commitID1.Hash),
+				common.Bytes2Hex(commitID2.Hash),
+				"evm store should be unchanged",
+			)
 		})
 	}
 }
