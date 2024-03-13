@@ -47,6 +47,8 @@ type Keeper interface {
 	SetState(ctx sdk.Context, addr common.Address, key, value common.Hash)
 	UnsetState(ctx sdk.Context, addr common.Address, key common.Hash) error
 
+	ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address) error
+
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
 	SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error
 	DeleteAccount(ctx sdk.Context, addr common.Address) error

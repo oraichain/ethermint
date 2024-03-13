@@ -29,7 +29,7 @@ func NewSnapshotCtx(initialCtx sdk.Context) *SnapshotCommitCtx {
 	// Create an initial snapshot of the initialCtx so no state is written until
 	// Commit() is called. The ID is -1 but disregarded along with the
 	// StoreRevertKey indices as this is only to branch the ctx.
-	_ = sCtx.Snapshot(0, StoreRevertKey{0, 0, 0, 0})
+	_ = sCtx.Snapshot(0, StoreRevertKey{0, 0, 0, 0, 0})
 
 	return sCtx
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/testutil"
+	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -382,6 +383,7 @@ func (suite *StateDBTestSuite) TestRevertSnapshot() {
 	for _, tc := range testCases {
 		suite.Run(tc.name, func() {
 			suite.SetupTest()
+			suite.App.AccountKeeper.GetModuleAccount(suite.Ctx, types.ModuleName)
 
 			ctx := suite.Ctx
 			keeper := suite.App.EvmKeeper

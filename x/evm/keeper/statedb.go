@@ -16,8 +16,10 @@
 package keeper
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
+	"sort"
 
 	sdkmath "cosmossdk.io/math"
 
@@ -166,6 +168,59 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 		"codeHash", codeHash.Hex(),
 		"balance", account.Balance,
 	)
+	return nil
+}
+
+func (k *Keeper) ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address) error {
+	if len(addrs) == 0 {
+		return nil
+	}
+
+	accounts := make([]authtypes.AccountI, len(addrs))
+	for i, addr := range addrs {
+		cosmosAddr := sdk.AccAddress(addr.Bytes())
+		acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
+		if acct == nil {
+			return fmt.Errorf("account not found: %s", addr)
+		}
+
+		accounts[i] = acct
+	}
+
+	// Sort accounts by account number
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].GetAccountNumber() < accounts[j].GetAccountNumber()
+	})
+
+	accountNumberStart := accounts[0].GetAccountNumber()
+
+	// Ensure there are no number gaps
+	for i, acct := range accounts {
+		if acct.GetAccountNumber() != accountNumberStart+uint64(i) {
+			return fmt.Errorf(
+				"account number mismatch: expected %d, got %d",
+				accountNumberStart+uint64(i), acct.GetAccountNumber(),
+			)
+		}
+	}
+
+	// Sort accounts by address
+	sort.Slice(accounts, func(i, j int) bool {
+		return bytes.Compare(accounts[i].GetAddress(), accounts[j].GetAddress()) < 0
+	})
+
+	// Reassign account numbers
+	for i, acct := range accounts {
+		ethAcct, ok := acct.(ethermint.EthAccountI)
+		if !ok {
+			return fmt.Errorf("invalid account type: %T", acct)
+		}
+
+		// set account number
+		ethAcct.SetAccountNumber(accountNumberStart + uint64(i))
+		k.accountKeeper.SetAccount(ctx, acct)
+	}
+
 	return nil
 }
 
