@@ -13,6 +13,7 @@ type StoreRevertKey struct {
 	SuicidedAccountsIndex int
 	LogsIndex             int
 	ContractStatesIndex   int
+	CreatedAccountsIndex  int
 }
 
 // ContractStateKey represents the state key of a contract.
@@ -28,6 +29,7 @@ type EphemeralStore struct {
 	SuicidedAccountStates []common.Address
 	Logs                  []*ethtypes.Log
 	ContractStates        []ContractStateKey
+	CreatedAccounts       []common.Address
 }
 
 // NewEphemeralStore creates a new EphemeralStore.
@@ -37,6 +39,7 @@ func NewEphemeralStore() *EphemeralStore {
 		SuicidedAccountStates: nil,
 		Logs:                  nil,
 		ContractStates:        nil,
+		CreatedAccounts:       nil,
 	}
 }
 
@@ -47,6 +50,7 @@ func (es *EphemeralStore) GetRevertKey() StoreRevertKey {
 		SuicidedAccountsIndex: len(es.SuicidedAccountStates),
 		LogsIndex:             len(es.Logs),
 		ContractStatesIndex:   len(es.ContractStates),
+		CreatedAccountsIndex:  len(es.CreatedAccounts),
 	}
 }
 
@@ -60,6 +64,7 @@ func (es *EphemeralStore) Revert(key StoreRevertKey) {
 	es.SuicidedAccountStates = es.SuicidedAccountStates[:key.SuicidedAccountsIndex]
 	es.Logs = es.Logs[:key.LogsIndex]
 	es.ContractStates = es.ContractStates[:key.ContractStatesIndex]
+	es.CreatedAccounts = es.CreatedAccounts[:key.CreatedAccountsIndex]
 }
 
 func (es *EphemeralStore) ValidateRevertKey(key StoreRevertKey) error {
@@ -88,6 +93,13 @@ func (es *EphemeralStore) ValidateRevertKey(key StoreRevertKey) error {
 		return fmt.Errorf(
 			"invalid ContractStatesIndex, %d is greater than the length of the contract states (%d)",
 			key.ContractStatesIndex, len(es.ContractStates),
+		)
+	}
+
+	if key.CreatedAccountsIndex > len(es.CreatedAccounts) {
+		return fmt.Errorf(
+			"invalid CreatedAccountsIndex, %d is greater than the length of the created accounts (%d)",
+			key.CreatedAccountsIndex, len(es.CreatedAccounts),
 		)
 	}
 
@@ -191,4 +203,31 @@ func (es *EphemeralStore) HasContractStateKey(addr common.Address, key common.Ha
 // GetContractStateKeys returns all contract state keys.
 func (es *EphemeralStore) GetContractStateKeys() []ContractStateKey {
 	return es.ContractStates
+}
+
+// -----------------------------------------------------------------------------
+// Created accounts
+
+// AddCreatedAccount adds a created account to the store.
+func (es *EphemeralStore) AddCreatedAccount(addr common.Address) {
+	if es.HasCreatedAccount(addr) {
+		return
+	}
+
+	es.CreatedAccounts = append(es.CreatedAccounts, addr)
+}
+
+func (es *EphemeralStore) HasCreatedAccount(addr common.Address) bool {
+	for _, a := range es.CreatedAccounts {
+		if a == addr {
+			return true
+		}
+	}
+
+	return false
+}
+
+// GetAllCreatedAccounts returns all created accounts.
+func (es *EphemeralStore) GetAllCreatedAccounts() []common.Address {
+	return es.CreatedAccounts
 }

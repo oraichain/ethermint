@@ -202,6 +202,7 @@ func (s *StateDB) getOrNewAccount(addr common.Address) *Account {
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
 		account = NewEmptyAccount()
+		s.ephemeralStore.AddCreatedAccount(addr)
 	}
 
 	return account
@@ -473,6 +474,13 @@ func (s *StateDB) Commit() error {
 				return err
 			}
 		}
+	}
+
+	// Re-assign account numbers for newly created accounts in this tx to be
+	// ordered by address.
+	createdAddrs := s.ephemeralStore.GetAllCreatedAccounts()
+	if err := s.keeper.ReassignAccountNumbers(s.ctx.CurrentCtx(), createdAddrs); err != nil {
+		return err
 	}
 
 	// Commit after account deletions
