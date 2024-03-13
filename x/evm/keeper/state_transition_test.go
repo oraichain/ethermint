@@ -22,8 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/x/evm/keeper"
+	"github.com/evmos/ethermint/x/evm/legacystatedb"
 	"github.com/evmos/ethermint/x/evm/statedb"
-	"github.com/evmos/ethermint/x/evm/statedb_legacy"
 	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
@@ -791,7 +791,13 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 			},
 		},
 		{
-			"AddBalance",
+			"AddBalance-0",
+			func(vmdb vm.StateDB, addr common.Address) {
+				vmdb.AddBalance(addr, big.NewInt(0))
+			},
+		},
+		{
+			"AddBalance-NonZero",
 			func(vmdb vm.StateDB, addr common.Address) {
 				vmdb.AddBalance(addr, big.NewInt(5))
 			},
@@ -905,11 +911,8 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		}
 	}
 
-	ctxStateDBConstructor := func() StateDBCommit {
-		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-	}
 	legacyStateDBConstructor := func() StateDBCommit {
-		return statedb_legacy.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+		return legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
 
 	// Run the tests
@@ -930,6 +933,10 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	}
 
 	suite.T().Skip("CacheCtx StateDB does not currently support account number ordering")
+
+	ctxStateDBConstructor := func() StateDBCommit {
+		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	}
 
 	// CacheCtx statedb
 	for _, tt := range tests {
@@ -1085,9 +1092,6 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 }
 
 func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
-	// evm store keys prefixes:
-	// Code = 1
-	// Storage = 2
 	addr1 := common.BigToAddress(big.NewInt(1))
 	addr2 := common.BigToAddress(big.NewInt(2))
 
@@ -1168,7 +1172,7 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 			suite.SetupTest()
 			suite.Commit()
 
-			legacyDB := statedb_legacy.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			legacyDB := legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.maleate(legacyDB)
 			suite.Require().NoError(legacyDB.Commit())
 

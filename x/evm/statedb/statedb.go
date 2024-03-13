@@ -452,7 +452,7 @@ func (s *StateDB) Commit() error {
 		committedValue := s.keeper.GetState(s.ctx.initialCtx, change.Addr, change.Key)
 		dirtyValue := s.keeper.GetState(s.ctx.CurrentCtx(), change.Addr, change.Key)
 
-		// Different committed and dirty value, so we need to commit
+		// Different committed and dirty value, keep it for commit
 		if committedValue != dirtyValue {
 			continue
 		}
