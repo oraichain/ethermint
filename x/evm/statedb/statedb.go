@@ -22,7 +22,6 @@ import (
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	ibctransfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -471,13 +470,4 @@ func (s *StateDB) SetError(err error) {
 	}
 
 	s.sdkError = err
-}
-
-func (s *StateDB) IBCTransfer(goCtx context.Context, msg *ibctransfertypes.MsgTransfer) (*ibctransfertypes.MsgTransferResponse, error) {
-	resp, err := s.keeper.IBCTransferKeeper().Transfer(goCtx, msg)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp, nil
 }
