@@ -34,6 +34,11 @@ func NewSnapshotCtx(initialCtx sdk.Context) *SnapshotCommitCtx {
 	return sCtx
 }
 
+// InitialCtx returns the initial context prior to any snapshots.
+func (c *SnapshotCommitCtx) InitialCtx() sdk.Context {
+	return c.initialCtx
+}
+
 // CurrentCtx returns the current ctx, either the latest branched ctx, or the
 // initial ctx if there are no snapshots.
 func (c *SnapshotCommitCtx) CurrentCtx() sdk.Context {

@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/tests"
+	"github.com/evmos/ethermint/x/evm/hybridstatedb"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/legacystatedb"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -936,7 +937,7 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	/// suite.T().Skip("CacheCtx StateDB does not currently support account number ordering")
 
 	ctxStateDBConstructor := func() StateDBCommit {
-		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+		return hybridstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
 
 	// CacheCtx statedb
@@ -1057,7 +1058,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			// reset
 			suite.SetupTest()
 
-			db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			db := hybridstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.initializeState(db)
 
 			suite.Require().NoError(db.Commit())
@@ -1068,7 +1069,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			commitID1 := iavlStore.LastCommitID()
 
 			// New statedb that should not modify the underlying store
-			db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			db = hybridstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.maleate(db)
 
 			suite.Require().NoError(db.Commit())
