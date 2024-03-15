@@ -11,6 +11,8 @@ type Account struct {
 	Nonce    uint64
 	Balance  *big.Int
 	CodeHash []byte
+
+	AccountNumber uint64
 }
 
 // NewEmptyAccount returns an empty account.

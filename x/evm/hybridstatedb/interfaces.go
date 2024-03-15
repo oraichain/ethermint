@@ -16,10 +16,11 @@
 package hybridstatedb
 
 import (
+	"math/big"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/evmos/ethermint/x/evm/statedb"
 )
 
 // ExtStateDB defines an extension to the interface provided by the go-ethereum
@@ -35,15 +36,18 @@ type ExtStateDB interface {
 // Keeper provide underlying storage of StateDB
 type Keeper interface {
 	// Read methods
-	GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account
+	GetAccount(ctx sdk.Context, addr common.Address) *Account
+	GetBalance(ctx sdk.Context, addr common.Address) *big.Int
+	GetAccountNumber(ctx sdk.Context, addr common.Address) (uint64, bool)
 	GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash
 	GetCode(ctx sdk.Context, codeHash common.Hash) []byte
 	// the callback returns false to break early
 	ForEachStorage(ctx sdk.Context, addr common.Address, cb func(key, value common.Hash) bool)
 
 	// Write methods, only called by `StateDB.Commit()`
-	SetAccount(ctx sdk.Context, addr common.Address, account statedb.Account) error
+	SetAccount(ctx sdk.Context, addr common.Address, account Account) error
 	SetState(ctx sdk.Context, addr common.Address, key common.Hash, value common.Hash)
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
+	SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error
 	DeleteAccount(ctx sdk.Context, addr common.Address) error
 }

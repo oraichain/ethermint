@@ -31,24 +31,24 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/hybridstatedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-var _ statedb.Keeper = &Keeper{}
+var _ hybridstatedb.Keeper = &Keeper{}
 
 // ----------------------------------------------------------------------------
 // StateDB Keeper implementation
 // ----------------------------------------------------------------------------
 
 // GetAccount returns nil if account is not exist, returns error if it's not `EthAccountI`
-func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
+func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *hybridstatedb.Account {
 	acct := k.GetAccountWithoutBalance(ctx, addr)
 	if acct == nil {
 		return nil
 	}
 
-	acct.Balance = k.GetBalance(ctx, addr)
+	// acct.Balance = k.GetBalance(ctx, addr)
 	return acct
 }
 
@@ -123,7 +123,7 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.In
 }
 
 // SetAccount updates nonce/balance/codeHash together.
-func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account statedb.Account) error {
+func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account hybridstatedb.Account) error {
 	// update account
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
@@ -142,6 +142,12 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 		if err := ethAcct.SetCodeHash(codeHash); err != nil {
 			return err
 		}
+
+		if account.AccountNumber != 0 {
+			if err := ethAcct.SetAccountNumber(account.AccountNumber); err != nil {
+				return err
+			}
+		}
 	}
 
 	if !ok && account.IsContract() {
@@ -157,18 +163,28 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 
 	k.accountKeeper.SetAccount(ctx, acct)
 
-	if err := k.SetBalance(ctx, addr, account.Balance); err != nil {
-		return err
-	}
+	// if err := k.SetBalance(ctx, addr, account); err != nil {
+	// 	return err
+	// }
 
 	k.Logger(ctx).Debug(
 		"account updated",
 		"ethereum-address", addr.Hex(),
 		"nonce", account.Nonce,
 		"codeHash", codeHash.Hex(),
-		"balance", account.Balance,
+		// "balance", account.Balance,
 	)
 	return nil
+}
+
+func (k *Keeper) GetAccountNumber(ctx sdk.Context, addr common.Address) (uint64, bool) {
+	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
+	if acct == nil {
+		return 0, false
+	}
+
+	return acct.GetAccountNumber(), true
 }
 
 // ReassignAccountNumbers reassign account numbers for the given addresses,

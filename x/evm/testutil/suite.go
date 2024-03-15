@@ -19,6 +19,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	feemarkettypes "github.com/evmos/ethermint/x/feemarket/types"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
+	"github.com/evmos/ethermint/x/evm/hybridstatedb"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 
@@ -239,8 +241,8 @@ func (suite *TestSuite) Commit() abci.ResponseCommit {
 	return res
 }
 
-func (suite *TestSuite) StateDB() *statedb.StateDB {
-	return statedb.New(
+func (suite *TestSuite) StateDB() *hybridstatedb.StateDB {
+	return hybridstatedb.New(
 		suite.Ctx,
 		suite.App.EvmKeeper,
 		statedb.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes())),
@@ -448,4 +450,21 @@ func (suite *TestSuite) GetAllAccountStorage(
 	})
 
 	return states
+}
+
+func (suite *TestSuite) MintCoinsForAccount(
+	ctx sdk.Context,
+	addr sdk.AccAddress,
+	amount sdk.Coins,
+) {
+	err := suite.App.BankKeeper.MintCoins(ctx, minttypes.ModuleName, amount)
+	suite.Require().NoError(err)
+
+	err = suite.App.BankKeeper.SendCoinsFromModuleToAccount(
+		ctx,
+		minttypes.ModuleName,
+		addr,
+		amount,
+	)
+	suite.Require().NoError(err)
 }

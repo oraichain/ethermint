@@ -913,49 +913,55 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		}
 	}
 
+	// Fn that runs all test variations with the given stateDBConstructor
+	execTests := func(stateDBConstructor func() StateDBCommit, suffix string) {
+		suffix = "_" + suffix
+
+		for _, tt := range tests {
+			// First run the tests against legacy statedb to ensure the correct
+			// behavior is expected
+			suite.Run(tt.name+suffix, func() {
+				testFn(stateDBConstructor, orderedAddrs, tt)
+			})
+
+			// Now do the same but reversed addresses
+			suite.Run(tt.name+"_reversed"+suffix, func() {
+				testFn(stateDBConstructor, reversedAddrs, tt)
+			})
+
+			// And again! but with random order
+			suite.Run(tt.name+"_random"+suffix, func() {
+				testFn(stateDBConstructor, addrsShuffled, tt)
+			})
+		}
+	}
+
 	legacyStateDBConstructor := func() StateDBCommit {
 		return legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
-
-	// Run the tests
-	for _, tt := range tests {
-		// First run the tests against legacy statedb to ensure the correct
-		// behavior is expected
-		suite.Run(tt.name+"_legacy", func() {
-			testFn(legacyStateDBConstructor, orderedAddrs, tt)
-		})
-
-		suite.Run(tt.name+"_reversed_legacy", func() {
-			testFn(legacyStateDBConstructor, reversedAddrs, tt)
-		})
-
-		suite.Run(tt.name+"_random_legacy", func() {
-			testFn(legacyStateDBConstructor, addrsShuffled, tt)
-		})
-	}
-
-	/// suite.T().Skip("CacheCtx StateDB does not currently support account number ordering")
-
 	ctxStateDBConstructor := func() StateDBCommit {
+		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	}
+	hybridStateDBConstructor := func() StateDBCommit {
 		return hybridstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
 
-	// CacheCtx statedb
-	for _, tt := range tests {
-		suite.Run(tt.name, func() {
-			testFn(ctxStateDBConstructor, orderedAddrs, tt)
-		})
+	// -------------------------------------------------------------------------
+	// Run the tests
 
-		// Now do the same but reversed addresses
-		suite.Run(tt.name+"_reversed", func() {
-			testFn(ctxStateDBConstructor, reversedAddrs, tt)
-		})
+	// First run the tests against legacy statedb to ensure the correct
+	// behavior is expected
+	execTests(legacyStateDBConstructor, "legacy")
+	execTests(ctxStateDBConstructor, "ctx")
 
-		// And again! but with random order
-		suite.Run(tt.name+"_random", func() {
-			testFn(ctxStateDBConstructor, addrsShuffled, tt)
-		})
-	}
+	// External account changes, e.g. from precompiles that modify bank balances
+	// are not covered here, as we only want to ensure *existing* non-precompile
+	// accounts are in order. Once precompiles are enabled, it will no longer
+	// be state compatible, so the account numbering doesn't matter.
+	// Example: Precompile that transfers coins to a new account in the middle
+	// of a tx. This will create the account with a gap in the account numbers
+	// of accounts created within the StateDB
+	execTests(hybridStateDBConstructor, "hybrid")
 }
 
 func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {

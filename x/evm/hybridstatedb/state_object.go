@@ -22,21 +22,30 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/x/evm/statedb"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
 
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the storage of auth module.
-type Account = statedb.Account
+type Account struct {
+	// Balance is *not* included as it is managed by bank
+	Nonce    uint64
+	CodeHash []byte
+
+	AccountNumber uint64
+}
 
 // NewEmptyAccount returns an empty account.
 func NewEmptyAccount() *Account {
 	return &Account{
-		Balance:  new(big.Int),
 		CodeHash: emptyCodeHash,
 	}
+}
+
+// IsContract returns if the account contains contract code.
+func (acct Account) IsContract() bool {
+	return !bytes.Equal(acct.CodeHash, emptyCodeHash)
 }
 
 // Storage represents in-memory cache/buffer of contract storage.
@@ -70,15 +79,19 @@ type stateObject struct {
 	address common.Address
 
 	// flags
-	dirtyCode bool
-	suicided  bool
+	dirtyCode    bool
+	suicided     bool
+	isNew        bool // created in this tx
+	dirtyBalance bool // balance has changed
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address common.Address, account Account) *stateObject {
-	if account.Balance == nil {
-		account.Balance = new(big.Int)
-	}
+func newObject(
+	db *StateDB,
+	address common.Address,
+	account Account,
+	isNew bool,
+) *stateObject {
 	if account.CodeHash == nil {
 		account.CodeHash = emptyCodeHash
 	}
@@ -88,12 +101,16 @@ func newObject(db *StateDB, address common.Address, account Account) *stateObjec
 		account:       account,
 		originStorage: make(Storage),
 		dirtyStorage:  make(Storage),
+		isNew:         isNew,
+		dirtyBalance:  false,
 	}
 }
 
 // empty returns whether the account is considered empty.
 func (s *stateObject) empty() bool {
-	return s.account.Nonce == 0 && s.account.Balance.Sign() == 0 && bytes.Equal(s.account.CodeHash, emptyCodeHash)
+	return s.account.Nonce == 0 &&
+		s.Balance().Sign() == 0 &&
+		bytes.Equal(s.account.CodeHash, emptyCodeHash)
 }
 
 func (s *stateObject) markSuicided() {
@@ -120,15 +137,23 @@ func (s *stateObject) SubBalance(amount *big.Int) {
 
 // SetBalance update account balance.
 func (s *stateObject) SetBalance(amount *big.Int) {
-	s.db.journal.append(balanceChange{
-		account: &s.address,
-		prev:    new(big.Int).Set(s.account.Balance),
-	})
+	// s.db.journal.append(balanceChange{
+	// 	account: &s.address,
+	// 	prev:    new(big.Int).Set(s.account.Balance),
+	// })
 	s.setBalance(amount)
 }
 
 func (s *stateObject) setBalance(amount *big.Int) {
-	s.account.Balance = amount
+	if err := s.db.keeper.SetBalance(s.db.ctx.CurrentCtx(), s.address, amount); err != nil {
+		// TODO: Move to Commit()
+		panic(err)
+	}
+
+	// SetBalance will create the account if it doesn't exist yet, so we need to
+	// mark it as dirty to keep track of which accounts were created outside of
+	// Commit()
+	s.dirtyBalance = true
 }
 
 //
@@ -196,7 +221,9 @@ func (s *stateObject) CodeHash() []byte {
 
 // Balance returns the balance of account
 func (s *stateObject) Balance() *big.Int {
-	return s.account.Balance
+	// Balance tracking uses the current ctx state, NOT journal state as
+	// precompiles can modify balances directly.
+	return s.db.keeper.GetBalance(s.db.ctx.CurrentCtx(), s.address)
 }
 
 // Nonce returns the nonce of account

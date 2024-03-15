@@ -71,6 +71,12 @@ func (s *StateDB) Keeper() Keeper {
 	return s.keeper
 }
 
+// Context returns the current sdk.Context of the latest snapshot for any
+// stateful cosmos operations.
+func (s *StateDB) Context() sdk.Context {
+	return s.ctx.CurrentCtx()
+}
+
 // AddLog adds a log, called by evm.
 func (s *StateDB) AddLog(log *ethtypes.Log) {
 	log.TxHash = s.txConfig.TxHash

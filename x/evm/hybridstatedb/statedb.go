@@ -87,6 +87,13 @@ func (s *StateDB) Keeper() Keeper {
 	return s.keeper
 }
 
+// Context returns the current sdk.Context of the latest snapshot for any
+// stateful cosmos operations.
+// NOTE: This should not be used for querying or modifying evm state.
+func (s *StateDB) Context() sdk.Context {
+	return s.ctx.CurrentCtx()
+}
+
 // AddLog adds a log, called by evm.
 func (s *StateDB) AddLog(log *ethtypes.Log) {
 	s.journal.append(addLogChange{})
@@ -134,6 +141,8 @@ func (s *StateDB) Empty(addr common.Address) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
+	// TODO: This should use the active ctx balance
+
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
@@ -223,13 +232,15 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
 	}
-	// If no live objects are available, load it from keeper
-	account := s.keeper.GetAccount(s.ctx.InitialCtx(), addr)
+	// If no live objects are available, load it from keeper.
+	// Use the current context to load the account as it may have been modified
+	// by a precompile.
+	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
 		return nil
 	}
 	// Insert into the live set
-	obj := newObject(s, addr, *account)
+	obj := newObject(s, addr, *account, false)
 	s.setStateObject(obj)
 	return obj
 }
@@ -248,7 +259,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getStateObject(addr)
 
-	newobj = newObject(s, addr, Account{})
+	newobj = newObject(s, addr, Account{}, true)
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
@@ -274,7 +285,7 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 func (s *StateDB) CreateAccount(addr common.Address) {
 	newObj, prev := s.createObject(addr)
 	if prev != nil {
-		newObj.setBalance(prev.account.Balance)
+		newObj.setBalance(prev.Balance())
 	}
 }
 
@@ -285,8 +296,8 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 		return nil
 	}
 
-	// TODO: InitialCtx or CurrentCtx? Initial will not include new keys
-	s.keeper.ForEachStorage(s.ctx.InitialCtx(), addr, func(key, value common.Hash) bool {
+	// TODO: InitialCtx or CurrentCtx? Neither will include new keys
+	s.keeper.ForEachStorage(s.ctx.CurrentCtx(), addr, func(key, value common.Hash) bool {
 		if value, dirty := so.dirtyStorage[key]; dirty {
 			return cb(key, value)
 		}
@@ -295,6 +306,7 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 		}
 		return true
 	})
+
 	return nil
 }
 
@@ -362,7 +374,7 @@ func (s *StateDB) Suicide(addr common.Address) bool {
 		prevbalance: new(big.Int).Set(stateObject.Balance()),
 	})
 	stateObject.markSuicided()
-	stateObject.account.Balance = new(big.Int)
+	stateObject.SetBalance(new(big.Int))
 
 	return true
 }
@@ -455,7 +467,33 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
-	for _, addr := range s.journal.sortedDirties() {
+	sortedDirties := s.journal.sortedDirties()
+
+	// Gather all the new account numbers
+	var accNumbers []uint64
+	for _, addr := range sortedDirties {
+		obj := s.stateObjects[addr]
+
+		// Account was both created AND had a balance change
+		if obj.isNew && obj.dirtyBalance {
+			accNumber, found := s.keeper.GetAccountNumber(s.ctx.CurrentCtx(), obj.Address())
+			if !found {
+				// If the balance is dirty, there must be an account that was
+				// created
+				panic("account number not found")
+			}
+			accNumbers = append(accNumbers, accNumber)
+		}
+	}
+
+	// Sort ascending account numbers
+	sort.Slice(accNumbers, func(i, j int) bool {
+		return accNumbers[i] < accNumbers[j]
+	})
+
+	currentAccNumberIdx := 0
+
+	for _, addr := range sortedDirties {
 		obj := s.stateObjects[addr]
 		if obj.suicided {
 			if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), obj.Address()); err != nil {
@@ -465,9 +503,20 @@ func (s *StateDB) Commit() error {
 			if obj.code != nil && obj.dirtyCode {
 				s.keeper.SetCode(s.ctx.CurrentCtx(), obj.CodeHash(), obj.code)
 			}
+
+			// Re-assign account number to the next available number
+			if obj.isNew && obj.dirtyBalance {
+				accNumber := accNumbers[currentAccNumberIdx]
+				currentAccNumberIdx++
+				obj.account.AccountNumber = accNumber
+			}
+
+			fmt.Printf("balance: %s\n", obj.Balance().String())
+
 			if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), obj.Address(), obj.account); err != nil {
 				return errorsmod.Wrap(err, "failed to set account")
 			}
+
 			for _, key := range obj.dirtyStorage.SortedKeys() {
 				value := obj.dirtyStorage[key]
 				// Skip noop changes, persist actual changes
