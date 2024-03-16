@@ -13,7 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the Ethermint library. If not, see https://github.com/evmos/ethermint/blob/main/LICENSE
-package hybridstatedb
+package ctxstatedb
 
 import (
 	"math/big"
@@ -37,8 +37,6 @@ type ExtStateDB interface {
 type Keeper interface {
 	// Read methods
 	GetAccount(ctx sdk.Context, addr common.Address) *Account
-	GetBalance(ctx sdk.Context, addr common.Address) *big.Int
-	GetAccountNumber(ctx sdk.Context, addr common.Address) (uint64, bool)
 	GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash
 	GetCode(ctx sdk.Context, codeHash common.Hash) []byte
 	// the callback returns false to break early
@@ -46,7 +44,11 @@ type Keeper interface {
 
 	// Write methods, only called by `StateDB.Commit()`
 	SetAccount(ctx sdk.Context, addr common.Address, account Account) error
-	SetState(ctx sdk.Context, addr common.Address, key common.Hash, value common.Hash)
+	SetState(ctx sdk.Context, addr common.Address, key, value common.Hash)
+	UnsetState(ctx sdk.Context, addr common.Address, key common.Hash) error
+
+	ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address) error
+
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
 	SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error
 	DeleteAccount(ctx sdk.Context, addr common.Address) error

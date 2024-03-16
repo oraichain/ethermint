@@ -31,18 +31,18 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/hybridstatedb"
+	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
 
-var _ hybridstatedb.Keeper = &Keeper{}
+var _ statedb.Keeper = &Keeper{}
 
 // ----------------------------------------------------------------------------
 // StateDB Keeper implementation
 // ----------------------------------------------------------------------------
 
 // GetAccount returns nil if account is not exist, returns error if it's not `EthAccountI`
-func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *hybridstatedb.Account {
+func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
 	acct := k.GetAccountWithoutBalance(ctx, addr)
 	if acct == nil {
 		return nil
@@ -123,7 +123,7 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.In
 }
 
 // SetAccount updates nonce/balance/codeHash together.
-func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account hybridstatedb.Account) error {
+func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account statedb.Account) error {
 	// update account
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)

@@ -1,4 +1,4 @@
-package statedb
+package ctxstatedb
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ func NewSnapshotCtx(initialCtx sdk.Context) *SnapshotCommitCtx {
 	// Create an initial snapshot of the initialCtx so no state is written until
 	// Commit() is called. The ID is -1 but disregarded along with the
 	// StoreRevertKey indices as this is only to branch the ctx.
-	_ = sCtx.Snapshot(0)
+	_ = sCtx.Snapshot(0, StoreRevertKey{0, 0, 0, 0, 0})
 
 	return sCtx
 }
@@ -62,6 +62,7 @@ func (c *SnapshotCommitCtx) CurrentSnapshot() (CtxSnapshot, bool) {
 // Snapshot creates a new branched context and returns the revision id.
 func (c *SnapshotCommitCtx) Snapshot(
 	journalIndex int,
+	storeRevertKey StoreRevertKey,
 ) int {
 	id := c.nextSnapshotID
 	c.nextSnapshotID++
@@ -79,7 +80,8 @@ func (c *SnapshotCommitCtx) Snapshot(
 		ctx:   newCtx,
 		write: newWrite,
 
-		journalIndex: journalIndex,
+		journalIndex:   journalIndex,
+		storeRevertKey: storeRevertKey,
 	})
 
 	return id
@@ -124,5 +126,7 @@ type CtxSnapshot struct {
 	ctx   sdk.Context
 	write func()
 
-	journalIndex int
+	// In-memory things like logs, access list
+	journalIndex   int
+	storeRevertKey StoreRevertKey
 }

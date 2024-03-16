@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/tests"
-	"github.com/evmos/ethermint/x/evm/hybridstatedb"
+	"github.com/evmos/ethermint/x/evm/ctxstatedb"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/legacystatedb"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -940,10 +940,10 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 		return legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
 	ctxStateDBConstructor := func() StateDBCommit {
-		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+		return ctxstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
 	hybridStateDBConstructor := func() StateDBCommit {
-		return hybridstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
 
 	// -------------------------------------------------------------------------

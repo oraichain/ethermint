@@ -1,4 +1,4 @@
-package statedb_test
+package ctxstatedb_test
 
 import (
 	"fmt"
@@ -12,8 +12,8 @@ import (
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	statedb "github.com/evmos/ethermint/x/evm/ctxstatedb"
 	"github.com/evmos/ethermint/x/evm/keeper"
-	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/testutil"
 	"github.com/stretchr/testify/require"
 

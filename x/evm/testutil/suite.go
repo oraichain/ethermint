@@ -29,7 +29,6 @@ import (
 	"github.com/evmos/ethermint/server/config"
 	"github.com/evmos/ethermint/tests"
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/hybridstatedb"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 
@@ -241,8 +240,8 @@ func (suite *TestSuite) Commit() abci.ResponseCommit {
 	return res
 }
 
-func (suite *TestSuite) StateDB() *hybridstatedb.StateDB {
-	return hybridstatedb.New(
+func (suite *TestSuite) StateDB() *statedb.StateDB {
+	return statedb.New(
 		suite.Ctx,
 		suite.App.EvmKeeper,
 		statedb.NewEmptyTxConfig(common.BytesToHash(suite.Ctx.HeaderHash().Bytes())),

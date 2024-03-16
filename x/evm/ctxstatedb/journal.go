@@ -14,13 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package hybridstatedb
+package ctxstatedb
 
 import (
-	"bytes"
-	"math/big"
-	"sort"
-
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -47,20 +43,6 @@ func newJournal() *journal {
 	return &journal{
 		dirties: make(map[common.Address]int),
 	}
-}
-
-// sortedDirties sort the dirty addresses for deterministic iteration
-func (j *journal) sortedDirties() []common.Address {
-	keys := make([]common.Address, len(j.dirties))
-	i := 0
-	for k := range j.dirties {
-		keys[i] = k
-		i++
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) < 0
-	})
-	return keys
 }
 
 // append inserts a new modification entry to the end of the change journal.
@@ -94,43 +76,6 @@ func (j *journal) length() int {
 }
 
 type (
-	// Changes to the account trie.
-	createObjectChange struct {
-		account *common.Address
-	}
-	resetObjectChange struct {
-		prev *stateObject
-	}
-	suicideChange struct {
-		account     *common.Address
-		prev        bool // whether account had already suicided
-		prevbalance *big.Int
-	}
-
-	// Changes to individual accounts.
-	balanceChange struct {
-		account *common.Address
-		prev    *big.Int
-	}
-	nonceChange struct {
-		account *common.Address
-		prev    uint64
-	}
-	storageChange struct {
-		account       *common.Address
-		key, prevalue common.Hash
-	}
-	codeChange struct {
-		account            *common.Address
-		prevcode, prevhash []byte
-	}
-
-	// Changes to other state values.
-	refundChange struct {
-		prev uint64
-	}
-	addLogChange struct{}
-
 	// Changes to the access list
 	accessListAddAccountChange struct {
 		address *common.Address
@@ -140,82 +85,6 @@ type (
 		slot    *common.Hash
 	}
 )
-
-func (ch createObjectChange) Revert(s *StateDB) {
-	delete(s.stateObjects, *ch.account)
-}
-
-func (ch createObjectChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch resetObjectChange) Revert(s *StateDB) {
-	s.setStateObject(ch.prev)
-}
-
-func (ch resetObjectChange) Dirtied() *common.Address {
-	return nil
-}
-
-func (ch suicideChange) Revert(s *StateDB) {
-	obj := s.getStateObject(*ch.account)
-	if obj != nil {
-		obj.suicided = ch.prev
-		obj.setBalance(ch.prevbalance)
-	}
-}
-
-func (ch suicideChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch balanceChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setBalance(ch.prev)
-}
-
-func (ch balanceChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch nonceChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setNonce(ch.prev)
-}
-
-func (ch nonceChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch codeChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setCode(common.BytesToHash(ch.prevhash), ch.prevcode)
-}
-
-func (ch codeChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch storageChange) Revert(s *StateDB) {
-	s.getStateObject(*ch.account).setState(ch.key, ch.prevalue)
-}
-
-func (ch storageChange) Dirtied() *common.Address {
-	return ch.account
-}
-
-func (ch refundChange) Revert(s *StateDB) {
-	s.refund = ch.prev
-}
-
-func (ch refundChange) Dirtied() *common.Address {
-	return nil
-}
-
-func (ch addLogChange) Revert(s *StateDB) {
-	s.logs = s.logs[:len(s.logs)-1]
-}
-
-func (ch addLogChange) Dirtied() *common.Address {
-	return nil
-}
 
 func (ch accessListAddAccountChange) Revert(s *StateDB) {
 	/*

@@ -16,16 +16,25 @@
 package statedb
 
 import (
-	"bytes"
 	"fmt"
 	"math/big"
+	"sort"
 
+	errorsmod "cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 )
+
+// revision is the identifier of a version of state.
+// it consists of an auto-increment id and a journal index.
+// it's safer to use than using journal index alone.
+type revision struct {
+	id           int
+	journalIndex int
+}
 
 var _ vm.StateDB = &StateDB{}
 
@@ -35,34 +44,40 @@ var _ vm.StateDB = &StateDB{}
 // * Contracts
 // * Accounts
 type StateDB struct {
-	keeper   Keeper
+	keeper Keeper
+
+	ctx *SnapshotCommitCtx
+
+	// Journal of state modifications. This is the backbone of
+	// Snapshot and RevertToSnapshot.
+	journal        *journal
+	validRevisions []revision
+	nextRevisionID int
+
+	stateObjects map[common.Address]*stateObject
+
 	txConfig TxConfig
 
-	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
-	ephemeralStore *EphemeralStore    // in-memory temporary data
+	// The refund counter, also used by state transitioning.
+	refund uint64
 
-	// Journal is currently only used for tracking accessList
-	journal    *journal
+	// Per-transaction logs
+	logs []*ethtypes.Log
+
+	// Per-transaction access list
 	accessList *accessList
-
-	sdkError error
 }
 
 // New creates a new state from a given trie.
 func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 	return &StateDB{
-		keeper:   keeper,
+		keeper:       keeper,
+		ctx:          NewSnapshotCtx(ctx),
+		stateObjects: make(map[common.Address]*stateObject),
+		journal:      newJournal(),
+		accessList:   newAccessList(),
+
 		txConfig: txConfig,
-
-		// This internally creates a branched ctx so calling Commit() is required
-		// to write state to the incoming ctx.
-		ctx:            NewSnapshotCtx(ctx),
-		ephemeralStore: NewEphemeralStore(),
-
-		journal:    newJournal(),
-		accessList: newAccessList(),
-
-		sdkError: nil,
 	}
 }
 
@@ -73,69 +88,72 @@ func (s *StateDB) Keeper() Keeper {
 
 // Context returns the current sdk.Context of the latest snapshot for any
 // stateful cosmos operations.
+// NOTE: This should not be used for querying or modifying evm state.
 func (s *StateDB) Context() sdk.Context {
 	return s.ctx.CurrentCtx()
 }
 
 // AddLog adds a log, called by evm.
 func (s *StateDB) AddLog(log *ethtypes.Log) {
+	s.journal.append(addLogChange{})
+
 	log.TxHash = s.txConfig.TxHash
 	log.BlockHash = s.txConfig.BlockHash
 	log.TxIndex = s.txConfig.TxIndex
-	log.Index = s.txConfig.LogIndex + uint(len(s.ephemeralStore.Logs))
-
-	s.ephemeralStore.AddLog(log)
+	log.Index = s.txConfig.LogIndex + uint(len(s.logs))
+	s.logs = append(s.logs, log)
 }
 
 // Logs returns the logs of current transaction.
 func (s *StateDB) Logs() []*ethtypes.Log {
-	return s.ephemeralStore.GetLogs()
+	return s.logs
 }
 
 // AddRefund adds gas to the refund counter
 func (s *StateDB) AddRefund(gas uint64) {
-	s.ephemeralStore.AddRefund(gas)
+	s.journal.append(refundChange{prev: s.refund})
+	s.refund += gas
 }
 
 // SubRefund removes gas from the refund counter.
 // This method will panic if the refund counter goes below zero
 func (s *StateDB) SubRefund(gas uint64) {
-	s.ephemeralStore.SubRefund(gas)
+	s.journal.append(refundChange{prev: s.refund})
+	if gas > s.refund {
+		panic(fmt.Sprintf("Refund counter below zero (gas: %d > refund: %d)", gas, s.refund))
+	}
+	s.refund -= gas
 }
 
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
 func (s *StateDB) Exist(addr common.Address) bool {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	return account != nil
+	return s.getStateObject(addr) != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
 func (s *StateDB) Empty(addr common.Address) bool {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	if account == nil {
-		return true
-	}
-
-	return account.Balance.Sign() == 0 && account.Nonce == 0 && bytes.Equal(account.CodeHash, emptyCodeHash)
+	so := s.getStateObject(addr)
+	return so == nil || so.empty()
 }
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	if account != nil {
-		return account.Balance
-	}
+	// TODO: This should use the active ctx balance
 
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Balance()
+	}
 	return common.Big0
 }
 
 // GetNonce returns the nonce of account, 0 if not exists.
 func (s *StateDB) GetNonce(addr common.Address) uint64 {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	if account != nil {
-		return account.Nonce
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Nonce()
 	}
 
 	return 0
@@ -143,58 +161,61 @@ func (s *StateDB) GetNonce(addr common.Address) uint64 {
 
 // GetCode returns the code of account, nil if not exists.
 func (s *StateDB) GetCode(addr common.Address) []byte {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	if account == nil {
-		return nil
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.Code()
 	}
-
-	if bytes.Equal(account.CodeHash, emptyCodeHash) {
-		return nil
-	}
-
-	return s.keeper.GetCode(s.ctx.CurrentCtx(), common.BytesToHash(account.CodeHash))
+	return nil
 }
 
 // GetCodeSize returns the code size of account.
 func (s *StateDB) GetCodeSize(addr common.Address) int {
-	code := s.GetCode(addr)
-	return len(code)
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.CodeSize()
+	}
+	return 0
 }
 
 // GetCodeHash returns the code hash of account.
 func (s *StateDB) GetCodeHash(addr common.Address) common.Hash {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	if account == nil {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
 		return common.Hash{}
 	}
-
-	return common.BytesToHash(account.CodeHash)
+	return common.BytesToHash(stateObject.CodeHash())
 }
 
 // GetState retrieves a value from the given account's storage trie.
 func (s *StateDB) GetState(addr common.Address, hash common.Hash) common.Hash {
-	account := s.getOrNewAccount(addr)
-	if account == nil {
-		return common.Hash{}
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.GetState(hash)
 	}
-
-	return s.keeper.GetState(s.ctx.CurrentCtx(), addr, hash)
+	return common.Hash{}
 }
 
 // GetCommittedState retrieves a value from the given account's committed storage trie.
 func (s *StateDB) GetCommittedState(addr common.Address, hash common.Hash) common.Hash {
-	// This gets the state from the parent ctx which is the state before Commit()
-	return s.keeper.GetState(s.ctx.initialCtx, addr, hash)
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.GetCommittedState(hash)
+	}
+	return common.Hash{}
 }
 
 // GetRefund returns the current value of the refund counter.
 func (s *StateDB) GetRefund() uint64 {
-	return s.ephemeralStore.GetRefund()
+	return s.refund
 }
 
 // HasSuicided returns if the contract is suicided in current transaction.
 func (s *StateDB) HasSuicided(addr common.Address) bool {
-	return s.ephemeralStore.GetAccountSuicided(addr)
+	stateObject := s.getStateObject(addr)
+	if stateObject != nil {
+		return stateObject.suicided
+	}
+	return false
 }
 
 // AddPreimage records a SHA3 preimage seen by the VM.
@@ -203,15 +224,51 @@ func (s *StateDB) HasSuicided(addr common.Address) bool {
 // to the database.
 func (s *StateDB) AddPreimage(hash common.Hash, preimage []byte) {} //nolint: revive
 
-// getOrNewAccount retrieves a state account or create a new account if nil.
-func (s *StateDB) getOrNewAccount(addr common.Address) *Account {
+// getStateObject retrieves a state object given by the address, returning nil if
+// the object is not found.
+func (s *StateDB) getStateObject(addr common.Address) *stateObject {
+	// Prefer live objects if any is available
+	if obj := s.stateObjects[addr]; obj != nil {
+		return obj
+	}
+	// If no live objects are available, load it from keeper.
+	// Use the current context to load the account as it may have been modified
+	// by a precompile.
 	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
 	if account == nil {
-		account = NewEmptyAccount()
-		s.ephemeralStore.AddCreatedAccount(addr)
+		return nil
 	}
+	// Insert into the live set
+	obj := newObject(s, addr, *account, false)
+	s.setStateObject(obj)
+	return obj
+}
 
-	return account
+// getOrNewStateObject retrieves a state object or create a new state object if nil.
+func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
+		stateObject, _ = s.createObject(addr)
+	}
+	return stateObject
+}
+
+// createObject creates a new state object. If there is an existing account with
+// the given address, it is overwritten and returned as the second return value.
+func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
+	prev = s.getStateObject(addr)
+
+	newobj = newObject(s, addr, Account{}, true)
+	if prev == nil {
+		s.journal.append(createObjectChange{account: &addr})
+	} else {
+		s.journal.append(resetObjectChange{prev: prev})
+	}
+	s.setStateObject(newobj)
+	if prev != nil {
+		return newobj, prev
+	}
+	return newobj, nil
 }
 
 // CreateAccount explicitly creates a state object. If a state object with the address
@@ -225,33 +282,35 @@ func (s *StateDB) getOrNewAccount(addr common.Address) *Account {
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
 func (s *StateDB) CreateAccount(addr common.Address) {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	if account == nil {
-		// No account found, create a new one
-		if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *NewEmptyAccount()); err != nil {
-			s.SetError(fmt.Errorf("failed to create account: %w", err))
-		}
-
-		return
-	}
-
-	// If there is already an account, zero out everything except for the balance ?
-	// This is done in previous StateDB
-
-	// Create a new account -- Must use NewEmptyAccount() so that the
-	// CodeHash is the actual hash of nil, not an empty byte slice
-	newAccount := NewEmptyAccount()
-	newAccount.Balance = account.Balance
-
-	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *newAccount); err != nil {
-		s.SetError(fmt.Errorf("failed to create account: %w", err))
+	newObj, prev := s.createObject(addr)
+	if prev != nil {
+		newObj.setBalance(prev.Balance())
 	}
 }
 
 // ForEachStorage iterate the contract storage, the iteration order is not defined.
 func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
-	s.keeper.ForEachStorage(s.ctx.initialCtx, addr, cb)
+	so := s.getStateObject(addr)
+	if so == nil {
+		return nil
+	}
+
+	// TODO: InitialCtx or CurrentCtx? Neither will include new keys
+	s.keeper.ForEachStorage(s.ctx.CurrentCtx(), addr, func(key, value common.Hash) bool {
+		if value, dirty := so.dirtyStorage[key]; dirty {
+			return cb(key, value)
+		}
+		if len(value) > 0 {
+			return cb(key, value)
+		}
+		return true
+	})
+
 	return nil
+}
+
+func (s *StateDB) setStateObject(object *stateObject) {
+	s.stateObjects[object.Address()] = object
 }
 
 /*
@@ -260,74 +319,42 @@ func (s *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.
 
 // AddBalance adds amount to the account associated with addr.
 func (s *StateDB) AddBalance(addr common.Address, amount *big.Int) {
-	// Geth apparently allows negative amounts, but can cause negative
-	// balance which is not allowed in bank keeper. However, we need to create
-	// the account still.
-
-	account := s.getOrNewAccount(addr)
-
-	account.Balance = new(big.Int).Add(account.Balance, amount)
-	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		s.SetError(fmt.Errorf("failed to set account for balance addition: %w", err))
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.AddBalance(amount)
 	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.
 func (s *StateDB) SubBalance(addr common.Address, amount *big.Int) {
-	// Avoid returning on 0 value to allow for account to be created still.
-	// This should be a non-issue if state clearing is implemented, as if there
-	// is an non-existent account and 0 balance is added, an account isn't
-	// created.
-	account := s.getOrNewAccount(addr)
-
-	account.Balance = new(big.Int).Sub(account.Balance, amount)
-	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		s.SetError(fmt.Errorf("failed to set account for balance subtraction: %w", err))
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SubBalance(amount)
 	}
 }
 
 // SetNonce sets the nonce of account.
 func (s *StateDB) SetNonce(addr common.Address, nonce uint64) {
-	account := s.getOrNewAccount(addr)
-
-	account.Nonce = nonce
-	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		s.SetError(fmt.Errorf("failed to set account for nonce: %w", err))
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetNonce(nonce)
 	}
 }
 
 // SetCode sets the code of account.
 func (s *StateDB) SetCode(addr common.Address, code []byte) {
-	account := s.getOrNewAccount(addr)
-	account.CodeHash = crypto.Keccak256Hash(code).Bytes()
-
-	// Set account so CodeHash is updated
-	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *account); err != nil {
-		s.SetError(fmt.Errorf("failed to set account for code: %w", err))
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetCode(crypto.Keccak256Hash(code), code)
 	}
-
-	s.keeper.SetCode(s.ctx.CurrentCtx(), account.CodeHash, code)
 }
 
 // SetState sets the contract state.
 func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
-	acc := s.getOrNewAccount(addr)
-	if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), addr, *acc); err != nil {
-		s.SetError(fmt.Errorf("failed to set account for state: %w", err))
+	stateObject := s.getOrNewStateObject(addr)
+	if stateObject != nil {
+		stateObject.SetState(key, value)
 	}
-
-	// We cannot attempt to skip noop changes by just checking committed state
-	// Example:
-	// 1. With committed state to 0x0
-	// 2. Dirty change to 0x1
-	// 3. Dirty change to 0x0 - cannot skip this
-	// 4. Commit
-	//
-	// End result: 0x0, but we cannot skip step 3 or it will be incorrectly 0x1
-	s.keeper.SetState(s.ctx.CurrentCtx(), addr, key, value)
-
-	// Keep track of the key that had a state change
-	s.ephemeralStore.AddContractStateKey(addr, key)
 }
 
 // Suicide marks the given account as suicided.
@@ -336,17 +363,17 @@ func (s *StateDB) SetState(addr common.Address, key, value common.Hash) {
 // The account's state object is still available until the state is committed,
 // getStateObject will return a non-nil account after Suicide.
 func (s *StateDB) Suicide(addr common.Address) bool {
-	account := s.keeper.GetAccount(s.ctx.CurrentCtx(), addr)
-	if account == nil {
+	stateObject := s.getStateObject(addr)
+	if stateObject == nil {
 		return false
 	}
-
-	// Balance cleared, but code and state should still be available until Commit()
-	if err := s.keeper.SetBalance(s.ctx.CurrentCtx(), addr, common.Big0); err != nil {
-		s.SetError(fmt.Errorf("failed to remove suicide account balance: %w", err))
-	}
-
-	s.ephemeralStore.SetAccountSuicided(addr)
+	s.journal.append(suicideChange{
+		account:     &addr,
+		prev:        stateObject.suicided,
+		prevbalance: new(big.Int).Set(stateObject.Balance()),
+	})
+	stateObject.markSuicided()
+	stateObject.SetBalance(new(big.Int))
 
 	return true
 }
@@ -414,96 +441,93 @@ func (s *StateDB) SlotInAccessList(addr common.Address, slot common.Hash) (addre
 
 // Snapshot returns an identifier for the current revision of the state.
 func (s *StateDB) Snapshot() int {
-	return s.ctx.Snapshot(
-		s.journal.length(),
-		s.ephemeralStore.GetRevertKey(),
-	)
+	id := s.nextRevisionID
+	s.nextRevisionID++
+	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
+	return id
 }
 
 // RevertToSnapshot reverts all state changes made since the given revision.
 func (s *StateDB) RevertToSnapshot(revid int) {
-	s.ctx.Revert(revid)
-
-	currentSnapshot, found := s.ctx.CurrentSnapshot()
-	if !found {
-		panic(fmt.Errorf("current snapshot with id %d not found", revid))
+	// Find the snapshot in the stack of valid snapshots.
+	idx := sort.Search(len(s.validRevisions), func(i int) bool {
+		return s.validRevisions[i].id >= revid
+	})
+	if idx == len(s.validRevisions) || s.validRevisions[idx].id != revid {
+		panic(fmt.Errorf("revision id %v cannot be reverted", revid))
 	}
+	snapshot := s.validRevisions[idx].journalIndex
 
-	// Revert journal to the latest snapshot's journal index
-	s.journal.Revert(s, currentSnapshot.journalIndex)
-
-	// Revert ephemeral store: refunds, logs, suicided accounts
-	s.ephemeralStore.Revert(currentSnapshot.storeRevertKey)
+	// Replay the journal to undo changes and remove invalidated snapshots
+	s.journal.Revert(s, snapshot)
+	s.validRevisions = s.validRevisions[:idx]
 }
 
+// Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
-	// If there was an error during execution, commit will return error without
-	// persisting any changes to the underlying ctx. Instead of panicking at the
-	// call, we return the error here so it is more visible.
-	if s.sdkError != nil {
-		return s.sdkError
-	}
+	sortedDirties := s.journal.sortedDirties()
 
-	// Delete suicided accounts -- these still need to be committed
-	suicidedAddrs := s.ephemeralStore.GetAllSuicided()
-	for _, addr := range suicidedAddrs {
-		// Balance is also cleared as part of Keeper.DeleteAccount
-		if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), addr); err != nil {
-			return fmt.Errorf("failed to delete suicided account: %w", err)
+	// Gather all the new account numbers
+	var accNumbers []uint64
+	for _, addr := range sortedDirties {
+		obj := s.stateObjects[addr]
+
+		// Account was both created AND had a balance change
+		if obj.isNew && obj.dirtyBalance {
+			accNumber, found := s.keeper.GetAccountNumber(s.ctx.CurrentCtx(), obj.Address())
+			if !found {
+				// If the balance is dirty, there must be an account that was
+				// created
+				panic("account number not found")
+			}
+			accNumbers = append(accNumbers, accNumber)
 		}
 	}
 
-	// Check for any state no-op changes and skip committing
-	for _, change := range s.ephemeralStore.GetContractStateKeys() {
-		committedValue := s.keeper.GetState(s.ctx.initialCtx, change.Addr, change.Key)
-		dirtyValue := s.keeper.GetState(s.ctx.CurrentCtx(), change.Addr, change.Key)
+	// Sort ascending account numbers
+	sort.Slice(accNumbers, func(i, j int) bool {
+		return accNumbers[i] < accNumbers[j]
+	})
 
-		// Different committed and dirty value, keep it for commit
-		if committedValue != dirtyValue {
-			continue
-		}
+	currentAccNumberIdx := 0
 
-		// Remove no-op change from ALL snapshot contexts to prevent writing it
-		// to the store. This is necessary since the same key/value will still
-		// update the internal IAVL node version and thus the hash.
+	for _, addr := range sortedDirties {
+		obj := s.stateObjects[addr]
+		if obj.suicided {
+			if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), obj.Address()); err != nil {
+				return errorsmod.Wrap(err, "failed to delete account")
+			}
+		} else {
+			if obj.code != nil && obj.dirtyCode {
+				s.keeper.SetCode(s.ctx.CurrentCtx(), obj.CodeHash(), obj.code)
+			}
 
-		// We can't just remove it from the latest snapshot context, since all
-		// snapshots are written to the store. A snapshot in the "middle" may
-		// contain a state change that isn't just a no-op change but a
-		// completely different value.
-		// Example: A -(snapshot)-> B -(snapshot)-> A
-		// -> We need to remove BOTH the B -> A change and the A -> B change,
-		//    otherwise B will be written to the store.
-		for _, snapshot := range s.ctx.snapshots {
-			if err := s.keeper.UnsetState(snapshot.ctx, change.Addr, change.Key); err != nil {
-				return err
+			// Re-assign account number to the next available number
+			if obj.isNew && obj.dirtyBalance {
+				accNumber := accNumbers[currentAccNumberIdx]
+				currentAccNumberIdx++
+				obj.account.AccountNumber = accNumber
+			}
+
+			fmt.Printf("balance: %s\n", obj.Balance().String())
+
+			if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), obj.Address(), obj.account); err != nil {
+				return errorsmod.Wrap(err, "failed to set account")
+			}
+
+			for _, key := range obj.dirtyStorage.SortedKeys() {
+				value := obj.dirtyStorage[key]
+				// Skip noop changes, persist actual changes
+				if value == obj.originStorage[key] {
+					continue
+				}
+				s.keeper.SetState(s.ctx.CurrentCtx(), obj.Address(), key, value)
 			}
 		}
 	}
 
-	// Re-assign account numbers for newly created accounts in this tx to be
-	// ordered by address.
-	createdAddrs := s.ephemeralStore.GetAllCreatedAccounts()
-	if err := s.keeper.ReassignAccountNumbers(s.ctx.CurrentCtx(), createdAddrs); err != nil {
-		return err
-	}
-
-	// Commit after account deletions
 	s.ctx.Commit()
 
-	// Journal only contains non-state content, so nothing to commit.
 	return nil
-}
-
-// SetError sets the error in the StateDB which will be returned on Commit. This
-// only sets the first error that occurs. Subsequent calls to SetError will be
-// ignored as the initial error is the most important. Any errors that occur
-// after the first error may be due to invalid state caused by the first error.
-func (s *StateDB) SetError(err error) {
-	if s.sdkError != nil {
-		return
-	}
-
-	s.sdkError = err
 }

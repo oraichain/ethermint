@@ -1,9 +1,9 @@
-package statedb_test
+package ctxstatedb_test
 
 import (
 	"testing"
 
-	"github.com/evmos/ethermint/x/evm/statedb"
+	statedb "github.com/evmos/ethermint/x/evm/ctxstatedb"
 	"github.com/stretchr/testify/require"
 )
 
