@@ -113,6 +113,14 @@ func (s *stateObject) empty() bool {
 		bytes.Equal(s.account.CodeHash, emptyCodeHash)
 }
 
+// createdByBankTransfer returns true if the account was created by an sdk bank
+// transfer, i.e. balance changed for an account that previously did not exist.
+// This is used to determine if the account number has been externally assigned
+// on balance change and should be re-assigned to match the Commit() order.
+func (s *stateObject) createdByBankTransfer() bool {
+	return s.isNew && s.dirtyBalance
+}
+
 func (s *stateObject) markSuicided() {
 	s.suicided = true
 }
@@ -146,8 +154,7 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 
 func (s *stateObject) setBalance(amount *big.Int) {
 	if err := s.db.keeper.SetBalance(s.db.ctx.CurrentCtx(), s.address, amount); err != nil {
-		// TODO: Move to Commit()
-		panic(err)
+		s.db.SetError(err)
 	}
 
 	// SetBalance will create the account if it doesn't exist yet, so we need to

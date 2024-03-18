@@ -46,7 +46,8 @@ var _ vm.StateDB = &StateDB{}
 type StateDB struct {
 	keeper Keeper
 
-	ctx *SnapshotCommitCtx
+	ctx      *SnapshotCommitCtx
+	sdkError error
 
 	// Journal of state modifications. This is the backbone of
 	// Snapshot and RevertToSnapshot.
@@ -73,6 +74,7 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 	return &StateDB{
 		keeper:       keeper,
 		ctx:          NewSnapshotCtx(ctx),
+		sdkError:     nil,
 		stateObjects: make(map[common.Address]*stateObject),
 		journal:      newJournal(),
 		accessList:   newAccessList(),
@@ -463,9 +465,25 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	s.validRevisions = s.validRevisions[:idx]
 }
 
+// SetError sets the error in the StateDB which will be returned on Commit. This
+// only sets the first error that occurs. Subsequent calls to SetError will be
+// ignored as the initial error is the most important. Any errors that occur
+// after the first error may be due to invalid state caused by the first error.
+func (s *StateDB) SetError(err error) {
+	if s.sdkError != nil {
+		return
+	}
+
+	s.sdkError = err
+}
+
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
+	if s.sdkError != nil {
+		return s.sdkError
+	}
+
 	sortedDirties := s.journal.sortedDirties()
 
 	// Gather all the new account numbers
@@ -474,11 +492,11 @@ func (s *StateDB) Commit() error {
 		obj := s.stateObjects[addr]
 
 		// Account was both created AND had a balance change
-		if obj.isNew && obj.dirtyBalance {
+		if obj.createdByBankTransfer() {
 			accNumber, found := s.keeper.GetAccountNumber(s.ctx.CurrentCtx(), obj.Address())
 			if !found {
 				// If the balance is dirty, there must be an account that was
-				// created
+				// created due to bank send
 				panic("account number not found")
 			}
 			accNumbers = append(accNumbers, accNumber)
@@ -504,13 +522,11 @@ func (s *StateDB) Commit() error {
 			}
 
 			// Re-assign account number to the next available number
-			if obj.isNew && obj.dirtyBalance {
+			if obj.createdByBankTransfer() {
 				accNumber := accNumbers[currentAccNumberIdx]
 				currentAccNumberIdx++
 				obj.account.AccountNumber = accNumber
 			}
-
-			fmt.Printf("balance: %s\n", obj.Balance().String())
 
 			if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), obj.Address(), obj.account); err != nil {
 				return errorsmod.Wrap(err, "failed to set account")
