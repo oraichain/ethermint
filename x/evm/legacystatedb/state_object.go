@@ -22,14 +22,17 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/evmos/ethermint/x/evm/statedb"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)
 
 // Account is the Ethereum consensus representation of accounts.
 // These objects are stored in the storage of auth module.
-type Account = statedb.Account
+type Account = struct {
+	Balance  *big.Int
+	Nonce    uint64
+	CodeHash []byte
+}
 
 // NewEmptyAccount returns an empty account.
 func NewEmptyAccount() *Account {

@@ -110,7 +110,7 @@ func (suite *KeeperTestSuite) TestGetAccountStorage() {
 
 func (suite *KeeperTestSuite) TestGetAccountOrEmpty() {
 	empty := statedb.Account{
-		Balance:  new(big.Int),
+		// Balance:  new(big.Int),
 		CodeHash: types.EmptyCodeHash,
 	}
 

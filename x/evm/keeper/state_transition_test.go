@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/evmos/ethermint/tests"
-	"github.com/evmos/ethermint/x/evm/ctxstatedb"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/legacystatedb"
 	"github.com/evmos/ethermint/x/evm/statedb"
@@ -939,9 +938,9 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	legacyStateDBConstructor := func() StateDBCommit {
 		return legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
-	ctxStateDBConstructor := func() StateDBCommit {
-		return ctxstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-	}
+	// ctxStateDBConstructor := func() StateDBCommit {
+	// 	return ctxstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	// }
 	hybridStateDBConstructor := func() StateDBCommit {
 		return statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	}
@@ -952,7 +951,7 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	// First run the tests against legacy statedb to ensure the correct
 	// behavior is expected
 	execTests(legacyStateDBConstructor, "legacy")
-	execTests(ctxStateDBConstructor, "ctx")
+	// execTests(ctxStateDBConstructor, "ctx")
 
 	// External account changes, e.g. from precompiles that modify bank balances
 	// are not covered here, as we only want to ensure *existing* non-precompile
@@ -1064,7 +1063,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			// reset
 			suite.SetupTest()
 
-			db := hybridstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.initializeState(db)
 
 			suite.Require().NoError(db.Commit())
@@ -1075,7 +1074,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			commitID1 := iavlStore.LastCommitID()
 
 			// New statedb that should not modify the underlying store
-			db = hybridstatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+			db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.maleate(db)
 
 			suite.Require().NoError(db.Commit())

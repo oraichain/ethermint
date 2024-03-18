@@ -240,49 +240,49 @@ func (suite *KeeperTestSuite) TestSetAccount() {
 		{
 			"new account, non-contract account",
 			tests.GenerateAddress(),
-			statedb.Account{10, big.NewInt(100), types.EmptyCodeHash},
+			statedb.Account{10, types.EmptyCodeHash, 1},
 			nil,
 		},
 		{
 			"new account, contract account",
 			tests.GenerateAddress(),
-			statedb.Account{10, big.NewInt(100), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10 /* big.NewInt(100),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
 			nil,
 		},
 		{
 			"existing eth account, non-contract account",
 			ethAddr,
-			statedb.Account{10, big.NewInt(1), types.EmptyCodeHash},
+			statedb.Account{10 /* big.NewInt(1),*/, types.EmptyCodeHash, 0},
 			nil,
 		},
 		{
 			"existing eth account, contract account",
 			ethAddr,
-			statedb.Account{10, big.NewInt(0), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10 /* big.NewInt(0),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
 			nil,
 		},
 		{
 			"existing base account, non-contract account",
 			baseAddr,
-			statedb.Account{10, big.NewInt(10), types.EmptyCodeHash},
+			statedb.Account{10 /* big.NewInt(10),*/, types.EmptyCodeHash, 0},
 			nil,
 		},
 		{
 			"existing base account, contract account",
 			baseAddr,
-			statedb.Account{10, big.NewInt(99), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10 /* big.NewInt(99),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
 			nil,
 		},
 		{
 			"existing vesting account, non-contract account",
 			vestingAddr,
-			statedb.Account{10, big.NewInt(1000), types.EmptyCodeHash},
+			statedb.Account{10 /* big.NewInt(1000),*/, types.EmptyCodeHash, 0},
 			nil,
 		},
 		{
 			"existing vesting account, contract account",
 			vestingAddr,
-			statedb.Account{10, big.NewInt(1001), crypto.Keccak256Hash([]byte("some code hash")).Bytes()},
+			statedb.Account{10 /* big.NewInt(1001),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
 			types.ErrInvalidAccount,
 		},
 	}
@@ -316,7 +316,7 @@ func (suite *KeeperTestSuite) TestSetAccount() {
 			suite.Equal(common.BytesToHash(tc.account.CodeHash), hash, "expected code hash to be set")
 
 			balance := vmdb.GetBalance(tc.address)
-			suite.Equal(balance, tc.account.Balance, "expected balance to be set")
+			suite.Equal(big.NewInt(0), balance, "balance is not set from SetAccount")
 		})
 	}
 }
