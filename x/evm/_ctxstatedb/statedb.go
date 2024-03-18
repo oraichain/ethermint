@@ -25,6 +25,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/evmos/ethermint/x/evm/statedb"
 )
 
 var _ vm.StateDB = &StateDB{}
@@ -36,7 +37,7 @@ var _ vm.StateDB = &StateDB{}
 // * Accounts
 type StateDB struct {
 	keeper   Keeper
-	txConfig TxConfig
+	txConfig statedb.TxConfig
 
 	ctx            *SnapshotCommitCtx // snapshot-able ctx manager
 	ephemeralStore *EphemeralStore    // in-memory temporary data
@@ -49,7 +50,7 @@ type StateDB struct {
 }
 
 // New creates a new state from a given trie.
-func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
+func New(ctx sdk.Context, keeper Keeper, txConfig statedb.TxConfig) *StateDB {
 	return &StateDB{
 		keeper:   keeper,
 		txConfig: txConfig,
