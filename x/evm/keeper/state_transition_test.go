@@ -1135,17 +1135,20 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 
 	tests := []struct {
 		name       string
+		initialize func()
 		maleate    func(vmdb vm.StateDB)
 		shouldSkip bool
 	}{
 		{
 			"noop",
+			func() {},
 			func(vmdb vm.StateDB) {
 			},
 			false,
 		},
 		{
 			"SetState",
+			func() {},
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr2, common.BigToHash(big.NewInt(1)), common.BigToHash(big.NewInt(2)))
 			},
@@ -1153,6 +1156,7 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 		},
 		{
 			"SetCode",
+			func() {},
 			func(vmdb vm.StateDB) {
 				vmdb.SetCode(addr2, []byte{1, 2, 3})
 			},
@@ -1160,6 +1164,7 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 		},
 		{
 			"SetState",
+			func() {},
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr2, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
 			},
@@ -1167,6 +1172,7 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 		},
 		{
 			"SetState + SetCode",
+			func() {},
 			func(vmdb vm.StateDB) {
 				vmdb.SetCode(addr1, []byte{10})
 				vmdb.SetState(addr2, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
@@ -1178,11 +1184,69 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 			// Journal -> SetAccount ordered by address @ Commit() -> addr1, addr2
 			// CacheCtx -> Ordered by first SetCode/SetState call -> addr2, addr1
 			"SetState + SetCode, reverse address",
+			func() {},
 			func(vmdb vm.StateDB) {
 				vmdb.SetCode(addr2, []byte{10})
 				vmdb.SetState(addr1, common.BytesToHash([]byte{1, 2, 3}), common.BytesToHash([]byte{4, 5, 6}))
 			},
 			true,
+		},
+		{
+			"AddBalance - new account",
+			func() {},
+			func(vmdb vm.StateDB) {
+				suite.Require().Nil(suite.App.EvmKeeper.GetAccount(suite.Ctx, addr1))
+				vmdb.AddBalance(addr1, big.NewInt(10))
+			},
+			false,
+		},
+		{
+			"AddBalance - descending multiple new accounts",
+			func() {},
+			func(vmdb vm.StateDB) {
+				suite.Require().Nil(suite.App.EvmKeeper.GetAccount(suite.Ctx, addr1))
+				suite.Require().Nil(suite.App.EvmKeeper.GetAccount(suite.Ctx, addr2))
+
+				vmdb.AddBalance(addr2, big.NewInt(10))
+				vmdb.AddBalance(addr1, big.NewInt(10))
+			},
+			false,
+		},
+		{
+			"AddBalance - ascending multiple new accounts",
+			func() {},
+			func(vmdb vm.StateDB) {
+				suite.Require().Nil(suite.App.EvmKeeper.GetAccount(suite.Ctx, addr1))
+				suite.Require().Nil(suite.App.EvmKeeper.GetAccount(suite.Ctx, addr2))
+
+				vmdb.AddBalance(addr2, big.NewInt(10))
+				vmdb.AddBalance(addr1, big.NewInt(10))
+			},
+			false,
+		},
+		{
+			"AddBalance - modifies existing account",
+			func() {
+				params := suite.App.EvmKeeper.GetParams(suite.Ctx)
+
+				// Create accounts
+				s.MintCoinsForAccount(suite.Ctx, sdk.AccAddress(addr1.Bytes()), sdk.NewCoins(sdk.NewInt64Coin(params.EvmDenom, 100)))
+				s.MintCoinsForAccount(suite.Ctx, sdk.AccAddress(addr2.Bytes()), sdk.NewCoins(sdk.NewInt64Coin(params.EvmDenom, 100)))
+
+				// Commit so we can test the IAVL node version is changed
+				suite.Commit()
+
+				suite.Require().NotNil(suite.App.EvmKeeper.GetAccount(suite.Ctx, addr1))
+				suite.Require().NotNil(suite.App.EvmKeeper.GetAccount(suite.Ctx, addr2))
+			},
+			func(vmdb vm.StateDB) {
+				// balance changes should mark accounts as dirty, so that
+				// the accounts are set in Commit()
+
+				vmdb.AddBalance(addr2, big.NewInt(10))
+				vmdb.AddBalance(addr1, big.NewInt(10))
+			},
+			false,
 		},
 	}
 
@@ -1193,7 +1257,11 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 			}
 
 			suite.SetupTest()
+			// Ensure evm module exists prior to tests so it isn't created mid-test
+			_ = suite.App.AccountKeeper.GetModuleAccount(suite.Ctx, types.ModuleName)
 			suite.Commit()
+
+			tt.initialize()
 
 			// Cache CTX statedb
 			ctxDB := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
@@ -1208,7 +1276,10 @@ func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
 			// --------------------------------------------
 			// Reset state for legacy journal based StateDB
 			suite.SetupTest()
+			_ = suite.App.AccountKeeper.GetModuleAccount(suite.Ctx, types.ModuleName)
 			suite.Commit()
+
+			tt.initialize()
 
 			legacyDB := legacystatedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.maleate(legacyDB)

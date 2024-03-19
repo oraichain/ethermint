@@ -145,10 +145,12 @@ func (s *stateObject) SubBalance(amount *big.Int) {
 
 // SetBalance update account balance.
 func (s *stateObject) SetBalance(amount *big.Int) {
-	// s.db.journal.append(balanceChange{
-	// 	account: &s.address,
-	// 	prev:    new(big.Int).Set(s.account.Balance),
-	// })
+	// Create a journal entry that only contains the address to track dirties.
+	// The prev value is not used as snapshots/rollbacks for balance state is
+	// managed by SnapshotCommitCtx
+	s.db.journal.append(balanceChange{
+		account: &s.address,
+	})
 	s.setBalance(amount)
 }
 

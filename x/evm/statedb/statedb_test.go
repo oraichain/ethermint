@@ -50,7 +50,7 @@ func (suite *HybridStateDBTestSuite) TestGetBalance_External() {
 			big.NewInt(100),
 		},
 		{
-			"external balance add",
+			"bank balance add",
 			func(db *statedb.StateDB) {
 				amount := big.NewInt(100)
 				db.AddBalance(address, amount)
@@ -65,6 +65,23 @@ func (suite *HybridStateDBTestSuite) TestGetBalance_External() {
 				)
 			},
 			big.NewInt(150),
+		},
+		{
+			"bank balance sub",
+			func(db *statedb.StateDB) {
+				amount := big.NewInt(100)
+				db.AddBalance(address, amount)
+
+				externalTransferAmount := big.NewInt(50)
+				err := suite.App.BankKeeper.SendCoins(
+					db.Context(),
+					sdk.AccAddress(address.Bytes()),
+					sdk.AccAddress(address2.Bytes()),
+					sdk.NewCoins(sdk.NewCoin(params.EvmDenom, sdk.NewIntFromBigInt(externalTransferAmount))),
+				)
+				suite.Require().NoError(err)
+			},
+			big.NewInt(50),
 		},
 	}
 

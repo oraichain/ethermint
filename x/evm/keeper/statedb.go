@@ -24,8 +24,6 @@ import (
 	sdkmath "cosmossdk.io/math"
 
 	errorsmod "cosmossdk.io/errors"
-	"github.com/cosmos/cosmos-sdk/store/cachekv"
-	"github.com/cosmos/cosmos-sdk/store/gaskv"
 	"github.com/cosmos/cosmos-sdk/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -293,6 +291,7 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key, value commo
 	)
 }
 
+/*
 func (k *Keeper) UnsetState(ctx sdk.Context, addr common.Address, key common.Hash) error {
 	ctxStore := ctx.KVStore(k.storeKey)
 	gasKVStore, ok := ctxStore.(*gaskv.Store)
@@ -321,6 +320,7 @@ func (k *Keeper) UnsetState(ctx sdk.Context, addr common.Address, key common.Has
 
 	return nil
 }
+*/
 
 // SetCode set contract code, delete if code is empty.
 func (k *Keeper) SetCode(ctx sdk.Context, codeHash, code []byte) {
