@@ -446,6 +446,9 @@ func (s *StateDB) Snapshot() int {
 	id := s.nextRevisionID
 	s.nextRevisionID++
 	s.validRevisions = append(s.validRevisions, revision{id, s.journal.length()})
+
+	s.ctx.Snapshot(id)
+
 	return id
 }
 
@@ -463,6 +466,8 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 	// Replay the journal to undo changes and remove invalidated snapshots
 	s.journal.Revert(s, snapshot)
 	s.validRevisions = s.validRevisions[:idx]
+
+	s.ctx.Revert(revid)
 }
 
 // SetError sets the error in the StateDB which will be returned on Commit. This

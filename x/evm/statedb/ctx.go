@@ -12,9 +12,6 @@ import (
 type SnapshotCommitCtx struct {
 	initialCtx sdk.Context
 	snapshots  []CtxSnapshot
-
-	// always incrementing snapshot ID, used to identify snapshots.
-	nextSnapshotID int
 }
 
 // NewSnapshotCtx creates a new SnapshotCtx from the initial context.
@@ -22,14 +19,12 @@ func NewSnapshotCtx(initialCtx sdk.Context) *SnapshotCommitCtx {
 	sCtx := &SnapshotCommitCtx{
 		initialCtx: initialCtx,
 		snapshots:  nil,
-		// Starts at -1 so the first snapshot is 0
-		nextSnapshotID: -1,
 	}
 
 	// Create an initial snapshot of the initialCtx so no state is written until
 	// Commit() is called. The ID is -1 but disregarded along with the
 	// StoreRevertKey indices as this is only to branch the ctx.
-	_ = sCtx.Snapshot(0)
+	sCtx.Snapshot(-1)
 
 	return sCtx
 }
@@ -59,13 +54,8 @@ func (c *SnapshotCommitCtx) CurrentSnapshot() (CtxSnapshot, bool) {
 	return c.snapshots[len(c.snapshots)-1], true
 }
 
-// Snapshot creates a new branched context and returns the revision id.
-func (c *SnapshotCommitCtx) Snapshot(
-	journalIndex int,
-) int {
-	id := c.nextSnapshotID
-	c.nextSnapshotID++
-
+// Snapshot creates a new branched context with the specified snapshot ID.
+func (c *SnapshotCommitCtx) Snapshot(snapshotId int) {
 	// Branch off a new CacheMultiStore + write function
 	newCtx, newWrite := c.CurrentCtx().CacheContext()
 
@@ -75,14 +65,10 @@ func (c *SnapshotCommitCtx) Snapshot(
 
 	// Save the new snapshot to the list
 	c.snapshots = append(c.snapshots, CtxSnapshot{
-		id:    id,
+		id:    snapshotId,
 		ctx:   newCtx,
 		write: newWrite,
-
-		journalIndex: journalIndex,
 	})
-
-	return id
 }
 
 // Revert reverts the state to the given revision id.
@@ -123,6 +109,4 @@ type CtxSnapshot struct {
 	id    int
 	ctx   sdk.Context
 	write func()
-
-	journalIndex int
 }
