@@ -471,7 +471,7 @@ func (s *StateDB) Commit() error {
 				if value == obj.originStorage[key] {
 					continue
 				}
-				s.keeper.SetState(s.ctx, obj.Address(), key, value)
+				s.keeper.SetState(s.ctx, obj.Address(), key, value.Bytes())
 			}
 		}
 	}

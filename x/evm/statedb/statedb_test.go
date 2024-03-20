@@ -366,8 +366,7 @@ func (suite *HybridStateDBTestSuite) TestState() {
 	}{
 		{"empty state", func(db *statedb.StateDB) {
 		}, nil},
-
-		{"set empty value deletes", func(db *statedb.StateDB) {
+		{"set empty value", func(db *statedb.StateDB) {
 			db.SetState(address, key1, common.Hash{})
 		}, map[common.Hash]common.Hash{}},
 

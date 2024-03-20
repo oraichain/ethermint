@@ -42,7 +42,7 @@ type Keeper interface {
 
 	// Write methods, only called by `StateDB.Commit()`
 	SetAccountLegacy(ctx sdk.Context, addr common.Address, account Account) error
-	SetState(ctx sdk.Context, addr common.Address, key common.Hash, value common.Hash)
+	SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte)
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
 	DeleteAccount(ctx sdk.Context, addr common.Address) error
 }
