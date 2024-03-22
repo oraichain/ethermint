@@ -492,6 +492,7 @@ func (s *StateDB) Commit() error {
 	sortedDirties := s.journal.sortedDirties()
 
 	// Gather all the new account numbers
+	bankCreatedAcc := make(map[common.Address]bool)
 	var accNumbers []uint64
 	for _, addr := range sortedDirties {
 		obj := s.stateObjects[addr]
@@ -499,11 +500,15 @@ func (s *StateDB) Commit() error {
 		// Account was both created AND had a balance change
 		if obj.createdByBankTransfer() {
 			accNumber, found := s.keeper.GetAccountNumber(s.ctx.CurrentCtx(), obj.Address())
+
+			// The account could be missing if the transfer was less than 1ukava
+			// as the evmutil handles balances less than 1ukava without calling
+			// the bank.MintCoins which would create the account.
 			if !found {
-				// If the balance is dirty, there must be an account that was
-				// created due to bank send
-				panic("account number not found")
+				continue
 			}
+
+			bankCreatedAcc[obj.Address()] = true
 			accNumbers = append(accNumbers, accNumber)
 		}
 	}
@@ -527,7 +532,7 @@ func (s *StateDB) Commit() error {
 			}
 
 			// Re-assign account number to the next available number
-			if obj.createdByBankTransfer() {
+			if bankCreatedAcc[obj.Address()] {
 				accNumber := accNumbers[currentAccNumberIdx]
 				currentAccNumberIdx++
 				obj.account.AccountNumber = accNumber
