@@ -187,6 +187,8 @@ func (b *Backend) GetBalance(address common.Address, blockNrOrHash rpctypes.Bloc
 
 // GetTransactionCount returns the number of transactions at the given address up to the given block number.
 func (b *Backend) GetTransactionCount(address common.Address, blockNum rpctypes.BlockNumber) (*hexutil.Uint64, error) {
+	_ = 42
+
 	// Get nonce (sequence) from account
 	from := sdk.AccAddress(address.Bytes())
 	accRet := b.clientCtx.AccountRetriever

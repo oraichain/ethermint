@@ -30,6 +30,8 @@ func main() {
 	setupConfig()
 	cmdcfg.RegisterDenoms()
 
+	_ = 42
+
 	rootCmd, _ := NewRootCmd()
 
 	if err := svrcmd.Execute(rootCmd, EnvPrefix, app.DefaultNodeHome); err != nil {
