@@ -108,7 +108,7 @@ jobs:
       - name: Show Versions
         run: python --version && python3 --version && pip --version && pip3 --version
       - name: Install python
-        run: sudo apt-get install -y python3.8
+        run: sudo apt-get update && sudo apt-get install -y python3.8
 #      - name: Downgrade Python
 #        run: pip install python==3.8
       - name: Show Versions
