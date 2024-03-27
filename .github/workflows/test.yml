@@ -105,6 +105,10 @@ jobs:
           # before trying to save a new cache
           gc-max-store-size-linux: 1073741824
 
+      - name: Show Versions
+        run: python --version && python3 --version && pip --version && pip3 --version
+      - name: Install poetry
+        run: pipx install poetry
       - name: Install deps
         run: poetry install
         working-directory: ./tests/integration_tests
