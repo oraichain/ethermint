@@ -105,6 +105,9 @@ jobs:
           # before trying to save a new cache
           gc-max-store-size-linux: 1073741824
 
+      - name: Install deps
+        run: poetry install
+        working-directory: ./tests/integration_tests
       - name: Run integration tests
         run: make run-integration-tests-without-nix
         if: env.GIT_DIFF
