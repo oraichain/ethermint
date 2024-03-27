@@ -107,6 +107,10 @@ jobs:
 
       - name: Show Versions
         run: python --version && python3 --version && pip --version && pip3 --version
+      - name: Downgrade Python
+        run: pip install python==3.8
+      - name: Show Versions
+        run: python --version && python3 --version && pip --version && pip3 --version
       - name: Install poetry
         run: pipx install poetry
       - name: Install deps
