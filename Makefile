@@ -340,6 +340,9 @@ test-rpc:
 run-integration-tests:
 	@nix-shell -I nixpkgs=./nix ./tests/integration_tests/shell.nix --run ./scripts/run-integration-tests.sh
 
+run-integration-tests-without-nix:
+	./scripts/run-integration-tests.sh
+
 .PHONY: run-integration-tests
 
 

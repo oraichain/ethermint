@@ -106,7 +106,7 @@ jobs:
           gc-max-store-size-linux: 1073741824
 
       - name: Run integration tests
-        run: make run-integration-tests
+        run: make run-integration-tests-without-nix
         if: env.GIT_DIFF
       - name: "Tar debug files"
         if: failure()
