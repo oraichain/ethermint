@@ -7,6 +7,6 @@ let
     owner = "nix-community";
     repo = "poetry2nix";
     rev = "e0b44e9e2d3aa855d1dd77b06f067cd0e0c3860d";
-    sha256 = "sha256-QSGP2J73HQ4gF5yh+MnClv2KUKzcpTmikdmV8ULfq2E=";
+    sha256 = "sha256-puYyylgrBS4AFAHeyVRTjTUVD8DZdecJfymWJe7H438=";
   };
 in import src { inherit pkgs; }
