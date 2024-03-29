@@ -1,5 +1,7 @@
-{ poetry2nix, lib, python310 }:
-poetry2nix.mkPoetryEnv {
+{ poetry2nix, lib, python310, callPackage }:
+
+let poetry2nix = callPackage ./poetry2nix {};
+in poetry2nix.mkPoetryEnv {
   projectDir = ../tests/integration_tests;
   python = python310;
   overrides = poetry2nix.overrides.withDefaults (lib.composeManyExtensions [

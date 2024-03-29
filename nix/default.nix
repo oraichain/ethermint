@@ -3,11 +3,11 @@
 import sources.nixpkgs {
   overlays = [
     (_: pkgs: {
-      go = pkgs.go_1_20;
+      go = pkgs.go_1_21;
       go-ethereum = pkgs.callPackage ./go-ethereum.nix {
         inherit (pkgs.darwin) libobjc;
         inherit (pkgs.darwin.apple_sdk.frameworks) IOKit;
-        buildGoModule = pkgs.buildGo120Module;
+        buildGoModule = pkgs.buildGo121Module;
       };
     }) # update to a version that supports eip-1559
     # https://github.com/NixOS/nixpkgs/pull/179622
@@ -29,7 +29,7 @@ import sources.nixpkgs {
       })
     (_: pkgs: { test-env = pkgs.callPackage ./testenv.nix { }; })
     (_: pkgs: {
-      cosmovisor = pkgs.buildGo120Module rec {
+      cosmovisor = pkgs.buildGo121Module rec {
         name = "cosmovisor";
         src = sources.cosmos-sdk + "/cosmovisor";
         subPackages = [ "./cmd/cosmovisor" ];
