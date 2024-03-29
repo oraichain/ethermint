@@ -72,10 +72,16 @@ func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
 
 // ValidateGenesis is the validation check of the Genesis
 func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingConfig, bz json.RawMessage) error {
+	fmt.Printf("x/emv/module.go: AppModuleBasic.ValidateGenesis(): begin\n")
+
+	fmt.Printf("x/emv/module.go: AppModuleBasic.ValidateGenesis(): before unmarshal\n")
 	var genesisState types.GenesisState
 	if err := cdc.UnmarshalJSON(bz, &genesisState); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
 	}
+	fmt.Printf("x/emv/module.go: AppModuleBasic.ValidateGenesis(): after unmarshal\n")
+
+	fmt.Printf("genesisState: %v\n", genesisState)
 
 	return genesisState.Validate()
 }
