@@ -16,6 +16,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/cosmos/cosmos-sdk/server"
@@ -27,6 +28,8 @@ import (
 )
 
 func main() {
+	fmt.Printf("OK\n")
+
 	setupConfig()
 	cmdcfg.RegisterDenoms()
 

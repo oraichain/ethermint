@@ -8,6 +8,7 @@ pkgs.mkShell {
     pkgs.cosmovisor
     pkgs.nodejs
     pkgs.test-env
+#    pkgs.delve
   ];
   shellHook = builtins.readFile ../../scripts/.env;
 }

@@ -49,8 +49,6 @@ func NewGenesisState(params Params, accounts []GenesisAccount) *GenesisState {
 // Validate performs basic genesis state validation returning an error upon any
 // failure.
 func (gs GenesisState) Validate() error {
-	return nil
-
 	seenAccounts := make(map[string]bool)
 	for _, acc := range gs.Accounts {
 		if seenAccounts[acc.Address] {

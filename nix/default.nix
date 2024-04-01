@@ -16,6 +16,7 @@ import sources.nixpkgs {
       (import "${sources.gomod2nix}/overlay.nix")
         (final // {
           inherit (final.darwin.apple_sdk_11_0) callPackage;
+#          tags = ["x"];
         })
         prev)
     (pkgs: _:
