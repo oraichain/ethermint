@@ -489,7 +489,22 @@ func (s *StateDB) Commit() error {
 		return s.sdkError
 	}
 
+	logger := s.ctx.CurrentCtx().Logger().With("module", "statedb")
+
 	sortedDirties := s.journal.sortedDirties()
+
+	dirtyHex := make([]string, len(sortedDirties))
+	for i, addr := range sortedDirties {
+		dirtyHex[i] = addr.Hex()
+	}
+
+	logger.Info(
+		"committing state changes",
+		"num_dirties",
+		len(sortedDirties),
+		"dirties",
+		dirtyHex,
+	)
 
 	// Gather all the new account numbers
 	bankCreatedAcc := make(map[common.Address]bool)
@@ -536,6 +551,37 @@ func (s *StateDB) Commit() error {
 				accNumber := accNumbers[currentAccNumberIdx]
 				currentAccNumberIdx++
 				obj.account.AccountNumber = accNumber
+			}
+
+			// Check if balance change was a noop
+			if obj.Balance().Cmp(obj.CommittedBalance()) == 0 {
+				logger.Info(
+					"noop balance change",
+					"address", obj.Address(),
+					"dirty_balance", obj.Balance(),
+					"committed_balance", obj.CommittedBalance(),
+				)
+
+				// Unset in all snapshots
+				for _, snapshot := range s.ctx.snapshots {
+					if err := s.keeper.UnsetBalanceChange(snapshot.ctx, obj.Address()); err != nil {
+						return err
+					}
+				}
+			}
+
+			hasBankDenomCommitted := s.keeper.HasBankDenom(s.ctx.InitialCtx(), obj.Address())
+			hasBankDenomDirty := s.keeper.HasBankDenom(s.ctx.CurrentCtx(), obj.Address())
+
+			// Non-zero A balance -> 0 -> Non-zero B balance will cause a
+			// re-write of the reverse index denom -> account address, causing
+			// IAVL version to be updated when it shouldn't.
+			if hasBankDenomCommitted == hasBankDenomDirty {
+				for _, snapshot := range s.ctx.snapshots {
+					if err := s.keeper.UnsetBankDenomMapping(snapshot.ctx, obj.Address()); err != nil {
+						return err
+					}
+				}
 			}
 
 			if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), obj.Address(), obj.account); err != nil {

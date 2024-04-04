@@ -50,4 +50,8 @@ type Keeper interface {
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
 	SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int) error
 	DeleteAccount(ctx sdk.Context, addr common.Address) error
+
+	UnsetBalanceChange(ctx sdk.Context, addr common.Address) error
+	UnsetBankDenomMapping(ctx sdk.Context, addr common.Address) error
+	HasBankDenom(ctx sdk.Context, addr common.Address) bool
 }

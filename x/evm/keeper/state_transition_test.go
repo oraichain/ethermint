@@ -2,6 +2,7 @@ package keeper_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"math/big"
@@ -17,6 +18,7 @@ import (
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -963,6 +965,23 @@ func (suite *KeeperTestSuite) TestAccountNumberOrder() {
 	execTests(hybridStateDBConstructor, "hybrid")
 }
 
+func (suite *KeeperTestSuite) GetStoreCommitHashes(
+	storeKeys []string,
+) map[string]string {
+	hashes := make(map[string]string)
+
+	for _, storeKey := range storeKeys {
+		key := suite.App.GetKey(storeKey)
+		store := suite.App.CommitMultiStore().GetStore(key)
+		iavlStore := store.(*iavl.Store)
+		commitID := iavlStore.LastCommitID()
+
+		hashes[storeKey] = hex.EncodeToString(commitID.Hash)
+	}
+
+	return hashes
+}
+
 func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 	// On StateDB.Commit(), if there is a dirty state change that matches the
 	// committed state, it should be skipped. Only state changes that are
@@ -986,12 +1005,14 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 	value := common.BigToHash(big.NewInt(20))
 
 	tests := []struct {
-		name            string
-		initializeState func(vmdb vm.StateDB)
-		maleate         func(vmdb vm.StateDB)
+		name              string
+		affectedStoreKeys []string
+		initializeState   func(vmdb vm.StateDB)
+		maleate           func(vmdb vm.StateDB)
 	}{
 		{
 			"SetState - no extra snapshots",
+			[]string{types.StoreKey},
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr, key, value)
 			},
@@ -1001,6 +1022,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 		},
 		{
 			"SetState - 2nd snapshot, same value",
+			[]string{types.StoreKey},
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr, key, value)
 			},
@@ -1016,6 +1038,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 		},
 		{
 			"SetState - 2nd snapshot, different value",
+			[]string{types.StoreKey},
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr, key, value)
 			},
@@ -1033,6 +1056,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 		},
 		{
 			"SetState - multiple snapshots, different value",
+			[]string{types.StoreKey},
 			func(vmdb vm.StateDB) {
 				vmdb.SetState(addr, key, value)
 			},
@@ -1056,6 +1080,57 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 				vmdb.SetState(addr, key, value)
 			},
 		},
+		{
+			"no-op balance change",
+			[]string{types.StoreKey, banktypes.ModuleName},
+			func(vmdb vm.StateDB) {
+				// Start with some non-zero balance
+				vmdb.AddBalance(addr, big.NewInt(10))
+			},
+			func(vmdb vm.StateDB) {
+				// No-op balance change
+				vmdb.AddBalance(addr, big.NewInt(50))
+				vmdb.SubBalance(addr, big.NewInt(40))
+				vmdb.SubBalance(addr, big.NewInt(10))
+			},
+		},
+		{
+			"no-op balance change to zero",
+			[]string{types.StoreKey, banktypes.ModuleName},
+			func(vmdb vm.StateDB) {
+				// Start with some non-zero balance
+				vmdb.AddBalance(addr, big.NewInt(10))
+			},
+			func(vmdb vm.StateDB) {
+				// No-op balance change
+				vmdb.AddBalance(addr, big.NewInt(50))
+
+				// Down to zero
+				vmdb.SubBalance(addr, big.NewInt(60))
+				suite.Require().Equal(int64(0), vmdb.GetBalance(addr).Int64())
+
+				// Back to a non-zero balance same as before
+				vmdb.SubBalance(addr, big.NewInt(10))
+			},
+		},
+		{
+			"no-op balance change with snapshots",
+			[]string{types.StoreKey, banktypes.ModuleName},
+			func(vmdb vm.StateDB) {
+				// Start with some non-zero balance
+				vmdb.AddBalance(addr, big.NewInt(10))
+			},
+			func(vmdb vm.StateDB) {
+				// No-op balance change
+				vmdb.AddBalance(addr, big.NewInt(50))
+
+				_ = vmdb.Snapshot()
+				vmdb.SubBalance(addr, big.NewInt(40))
+
+				_ = vmdb.Snapshot()
+				vmdb.SubBalance(addr, big.NewInt(10))
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1073,14 +1148,17 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			iavlStore := store.(*iavl.Store)
 			commitID1 := iavlStore.LastCommitID()
 
+			iavlHashes1 := s.GetStoreCommitHashes(tt.affectedStoreKeys)
+
 			// New statedb that should not modify the underlying store
 			db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tt.maleate(db)
 
 			suite.Require().NoError(db.Commit())
-			suite.Commit()
+			// suite.Commit()
 
 			commitID2 := iavlStore.LastCommitID()
+			iavlHashes2 := s.GetStoreCommitHashes(tt.affectedStoreKeys)
 
 			// We can compare the commitIDs since this is *only* the x/evm store which
 			// doesn't change between blocks without state changes. Any version change,
@@ -1091,6 +1169,9 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 				common.Bytes2Hex(commitID2.Hash),
 				"evm store should be unchanged",
 			)
+
+			// Check all affected stores
+			suite.Require().Equal(iavlHashes1, iavlHashes2)
 		})
 
 		suite.Run(tt.name+"_legacy", func() {

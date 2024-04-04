@@ -7,12 +7,14 @@ import (
 
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/cosmos/cosmos-sdk/store/iavl"
 	"github.com/cosmos/cosmos-sdk/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	vestingtypes "github.com/cosmos/cosmos-sdk/x/auth/vesting/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -1042,4 +1044,36 @@ func (suite *KeeperTestSuite) TestDeleteAccount() {
 			}
 		})
 	}
+}
+
+func (suite *KeeperTestSuite) TestUnsetBalanceChange() {
+	// init non-zero balance
+	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	db.AddBalance(suite.Address, big.NewInt(100))
+	suite.Require().NoError(db.Commit())
+
+	suite.Commit()
+
+	// No-op change
+	db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+
+	db.AddBalance(suite.Address, big.NewInt(100))
+	suite.Require().NotZero(db.GetBalance(suite.Address).Int64())
+
+	db.SubBalance(suite.Address, big.NewInt(10))
+	db.SubBalance(suite.Address, big.NewInt(90))
+
+	suite.Require().Equal(int64(100), db.GetBalance(suite.Address).Int64())
+
+	// Currently doesn't actually test if the state was removed, but just if it
+	// doesn't error
+	suite.Require().NoError(db.Commit())
+
+	suite.Commit()
+
+	store := suite.App.CommitMultiStore().GetStore(suite.App.GetKey(banktypes.StoreKey))
+	iavlStore := store.(*iavl.Store)
+
+	commitID1 := iavlStore.LastCommitID()
+	suite.T().Logf("commitID: %x", commitID1.Hash)
 }

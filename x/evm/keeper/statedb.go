@@ -17,6 +17,7 @@ package keeper
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"sort"
@@ -24,9 +25,14 @@ import (
 	sdkmath "cosmossdk.io/math"
 
 	errorsmod "cosmossdk.io/errors"
+	"github.com/cosmos/cosmos-sdk/store/cachekv"
+	"github.com/cosmos/cosmos-sdk/store/gaskv"
 	"github.com/cosmos/cosmos-sdk/store/prefix"
+	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/address"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/legacystatedb"
@@ -189,10 +195,6 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 
 	k.accountKeeper.SetAccount(ctx, acct)
 
-	// if err := k.SetBalance(ctx, addr, account); err != nil {
-	// 	return err
-	// }
-
 	k.Logger(ctx).Debug(
 		"account updated",
 		"ethereum-address", addr.Hex(),
@@ -201,6 +203,99 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 		// "balance", account.Balance,
 	)
 	return nil
+}
+
+func getCacheKVStore(ctx sdk.Context, storeKey storetypes.StoreKey) (*cachekv.Store, error) {
+	ctxStore := ctx.KVStore(storeKey)
+	gasKVStore, ok := ctxStore.(*gaskv.Store)
+	if !ok {
+		return nil, fmt.Errorf("expected gaskv.Store, got %T", ctxStore)
+	}
+
+	// Use parent of store and try as cachekv.Store
+	ctxStore = gasKVStore.GetParent()
+
+	cacheKVStore, ok := ctxStore.(*cachekv.Store)
+	if !ok {
+		return nil, fmt.Errorf("expected cachekv.Store, got %T", ctxStore)
+	}
+
+	return cacheKVStore, nil
+}
+
+func (k *Keeper) UnsetBalanceChange(ctx sdk.Context, addr common.Address) error {
+	bankStore, err := getCacheKVStore(ctx, k.bankStoreKey)
+	if err != nil {
+		return err
+	}
+
+	// We don't use params.EvmDenom since EvmDenom isn't used with bank module
+	// but x/evmutil only. We use ukava instead which is managed by x/evmutil
+	// and is the true denom being modified in x/bank
+	kavaDenom := "ukava"
+
+	// Stores modified by bankkeeper.setBalance must be unset
+	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	// Equivalent to using prefix.NewStore(cacheKVStore, banktypes.CreateAccountBalancesPrefix(cosmosAddr))
+	// but Unset is only defined on cachekv.Store
+	accKey := append(banktypes.CreateAccountBalancesPrefix(cosmosAddr), []byte(kavaDenom)...)
+	bankStore.Unset(accKey)
+
+	denomAddrKey := address.MustLengthPrefix(cosmosAddr)
+	denomKey := append(banktypes.CreateDenomAddressPrefix(kavaDenom), denomAddrKey...)
+	bankStore.Unset(denomKey)
+
+	evmutilStore, err := getCacheKVStore(ctx, k.evmutilStoreKey)
+	if err != nil {
+		return err
+	}
+
+	key := append([]byte{0x00}, address.MustLengthPrefix(cosmosAddr)...)
+	evmutilStore.Unset(key)
+
+	k.Logger(ctx).Info(
+		"balance unset",
+		"ethereum-address", addr.Hex(),
+		"key", hex.EncodeToString(accKey),
+		"denom-key", hex.EncodeToString(denomKey),
+		"evmutil-key", hex.EncodeToString(key),
+	)
+
+	return nil
+}
+
+func (k *Keeper) UnsetBankDenomMapping(ctx sdk.Context, addr common.Address) error {
+	bankStore, err := getCacheKVStore(ctx, k.bankStoreKey)
+	if err != nil {
+		return err
+	}
+
+	// We don't use params.EvmDenom since EvmDenom isn't used with bank module
+	// but x/evmutil only. We use ukava instead which is managed by x/evmutil
+	// and is the true denom being modified in x/bank
+	kavaDenom := "ukava"
+
+	denomAddrKey := address.MustLengthPrefix(sdk.AccAddress(addr.Bytes()))
+	denomKey := append(banktypes.CreateDenomAddressPrefix(kavaDenom), denomAddrKey...)
+	bankStore.Unset(denomKey)
+
+	k.Logger(ctx).Info(
+		"bank denom mapping unset",
+		"ethereum-address", addr.Hex(),
+		"denom-key", hex.EncodeToString(denomKey),
+	)
+
+	return nil
+}
+
+func (k *Keeper) HasBankDenom(ctx sdk.Context, addr common.Address) bool {
+	denomPrefixStore := k.getDenomAddressPrefixStore(ctx, "ukava")
+	denomAddrKey := address.MustLengthPrefix(sdk.AccAddress(addr.Bytes()))
+	return denomPrefixStore.Has(denomAddrKey)
+}
+
+func (k *Keeper) getDenomAddressPrefixStore(ctx sdk.Context, denom string) prefix.Store {
+	return prefix.NewStore(ctx.KVStore(k.bankStoreKey), banktypes.CreateDenomAddressPrefix(denom))
 }
 
 func (k *Keeper) GetAccountNumber(ctx sdk.Context, addr common.Address) (uint64, bool) {
@@ -276,6 +371,12 @@ func (k *Keeper) ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address)
 func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
 	action := "updated"
+
+	// value is a common.Hash which will never be empty as it is always
+	// HashLength. The fix is not included here to preserve the original state
+	// behavior which will set empty hash values.
+	// TODO: Replace value parameter type with common.Hash and replace this
+	// checkwith a check for default hash.
 	if len(value) == 0 {
 		store.Delete(key.Bytes())
 		action = "deleted"

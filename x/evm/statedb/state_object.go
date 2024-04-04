@@ -155,6 +155,16 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 }
 
 func (s *stateObject) setBalance(amount *big.Int) {
+	logger := s.db.ctx.CurrentCtx().Logger().With("module", "statedb")
+
+	logger.Info(
+		"setBalance",
+		"address",
+		s.address.Hex(),
+		"prev_amount", s.Balance(),
+		"new_amount", amount,
+	)
+
 	if err := s.db.keeper.SetBalance(s.db.ctx.CurrentCtx(), s.address, amount); err != nil {
 		s.db.SetError(err)
 	}
@@ -233,6 +243,11 @@ func (s *stateObject) Balance() *big.Int {
 	// Balance tracking uses the current ctx state, NOT journal state as
 	// precompiles can modify balances directly.
 	return s.db.keeper.GetBalance(s.db.ctx.CurrentCtx(), s.address)
+}
+
+// CommittedBalance returns the committed balance of account
+func (s *stateObject) CommittedBalance() *big.Int {
+	return s.db.keeper.GetBalance(s.db.ctx.InitialCtx(), s.address)
 }
 
 // Nonce returns the nonce of account
