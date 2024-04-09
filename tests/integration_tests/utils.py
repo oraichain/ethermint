@@ -206,11 +206,13 @@ def find_log_event_attrs(events, ev_type, cond=None):
                 return attrs
     return None
 
+
 def approve_proposal(n, rsp, status="PROPOSAL_STATUS_PASSED"):
     cli = n.cosmos_cli()
 
     # get proposal_id
     tx = cli.query_tx("hash", rsp["txhash"])
+
     def cb(attrs):
         return "proposal_id" in attrs
     ev = find_log_event_attrs(tx["logs"][0]["events"], "submit_proposal", cb)
@@ -226,7 +228,7 @@ def approve_proposal(n, rsp, status="PROPOSAL_STATUS_PASSED"):
     res = cli.query_tally(proposal_id)
     res = res.get("tally") or res
     assert (
-            int(res["yes_count"]) == cli.staking_pool()
+        int(res["yes_count"]) == cli.staking_pool()
     ), "all validators should have voted yes"
     print("wait for proposal to be activated")
     proposal = cli.query_proposal(proposal_id)

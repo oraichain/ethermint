@@ -116,7 +116,7 @@ def test_grpc_mode(custom_ethermint):
                 "--grpc-only",
                 "--home",
                 custom_ethermint.base_dir / "node1",
-                ],
+            ],
             stdout=logfile,
             stderr=subprocess.STDOUT,
         )
@@ -152,4 +152,3 @@ def test_grpc_mode(custom_ethermint):
         finally:
             proc.terminate()
             proc.wait()
-

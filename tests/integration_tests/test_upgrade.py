@@ -1,12 +1,11 @@
-import time
 import configparser
 import json
 import re
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
-from dateutil.parser import isoparse
 from pystarport import ports
 from pystarport.cluster import SUPERVISOR_CONFIG_FILE
 
@@ -14,13 +13,10 @@ from .network import Ethermint, setup_custom_ethermint
 from .utils import (
     ADDRS,
     CONTRACTS,
-    find_log_event_attrs,
     approve_proposal,
     deploy_contract,
-    parse_events,
     send_transaction,
     wait_for_block,
-    wait_for_block_time,
     wait_for_port,
 )
 
