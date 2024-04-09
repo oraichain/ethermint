@@ -142,8 +142,6 @@ func (s *StateDB) Empty(addr common.Address) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
-	// TODO: This should use the active ctx balance
-
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
@@ -553,35 +551,9 @@ func (s *StateDB) Commit() error {
 				obj.account.AccountNumber = accNumber
 			}
 
-			// Check if balance change was a noop
-			if obj.Balance().Cmp(obj.CommittedBalance()) == 0 {
-				logger.Info(
-					"noop balance change",
-					"address", obj.Address(),
-					"dirty_balance", obj.Balance(),
-					"committed_balance", obj.CommittedBalance(),
-				)
-
-				// Unset in all snapshots
-				for _, snapshot := range s.ctx.snapshots {
-					if err := s.keeper.UnsetBalanceChange(snapshot.ctx, obj.Address()); err != nil {
-						return err
-					}
-				}
-			}
-
-			hasBankDenomCommitted := s.keeper.HasBankDenom(s.ctx.InitialCtx(), obj.Address())
-			hasBankDenomDirty := s.keeper.HasBankDenom(s.ctx.CurrentCtx(), obj.Address())
-
-			// Non-zero A balance -> 0 -> Non-zero B balance will cause a
-			// re-write of the reverse index denom -> account address, causing
-			// IAVL version to be updated when it shouldn't.
-			if hasBankDenomCommitted == hasBankDenomDirty {
-				for _, snapshot := range s.ctx.snapshots {
-					if err := s.keeper.UnsetBankDenomMapping(snapshot.ctx, obj.Address()); err != nil {
-						return err
-					}
-				}
+			// Use the dirty balance to set the account balance
+			if err := s.keeper.SetBalance(s.ctx.CurrentCtx(), obj.Address(), obj.Balance()); err != nil {
+				return errorsmod.Wrap(err, "failed to set balance")
 			}
 
 			if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), obj.Address(), obj.account); err != nil {
@@ -599,7 +571,7 @@ func (s *StateDB) Commit() error {
 		}
 	}
 
-	s.ctx.Commit()
+	// s.ctx.Commit()
 
 	return nil
 }
