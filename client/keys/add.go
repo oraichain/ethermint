@@ -18,11 +18,10 @@ package keys
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
-
-	"encoding/json"
 
 	etherminthd "github.com/evmos/ethermint/crypto/hd"
 
