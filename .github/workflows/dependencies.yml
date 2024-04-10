@@ -1,5 +1,7 @@
 name: "Dependency Review"
-on: pull_request
+on: workflow_dispatch
+# Temporary disable Dependency Review job
+# on: pull_request
 
 permissions:
   contents: read
