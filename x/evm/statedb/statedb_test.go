@@ -290,7 +290,7 @@ func (suite *HybridStateDBTestSuite) TestDBError() {
 			func(db *statedb.StateDB) {
 				db.SubBalance(address, big.NewInt(1))
 			},
-			"0aphoton is smaller than 1aphoton",
+			"insufficient funds",
 		},
 		{
 			"multiple errors persist first error",
@@ -298,7 +298,7 @@ func (suite *HybridStateDBTestSuite) TestDBError() {
 				db.SubBalance(address, big.NewInt(200))
 				db.SubBalance(address2, big.NewInt(500))
 			},
-			"0aphoton is smaller than 200aphoton",
+			"insufficient funds",
 		},
 	}
 	for _, tc := range testCases {
