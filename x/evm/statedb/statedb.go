@@ -142,6 +142,8 @@ func (s *StateDB) Empty(addr common.Address) bool {
 
 // GetBalance retrieves the balance from the given address or 0 if object not found
 func (s *StateDB) GetBalance(addr common.Address) *big.Int {
+	// TODO: This should use the active ctx balance
+
 	stateObject := s.getStateObject(addr)
 	if stateObject != nil {
 		return stateObject.Balance()
@@ -551,11 +553,6 @@ func (s *StateDB) Commit() error {
 				obj.account.AccountNumber = accNumber
 			}
 
-			// Use the dirty balance to set the account balance
-			if err := s.keeper.SetBalance(s.ctx.CurrentCtx(), obj.Address(), obj.Balance()); err != nil {
-				return errorsmod.Wrap(err, "failed to set balance")
-			}
-
 			if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), obj.Address(), obj.account); err != nil {
 				return errorsmod.Wrap(err, "failed to set account")
 			}
@@ -571,7 +568,7 @@ func (s *StateDB) Commit() error {
 		}
 	}
 
-	// s.ctx.Commit()
+	s.ctx.Commit()
 
 	return nil
 }
