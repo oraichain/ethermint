@@ -27,7 +27,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
-	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethermint "github.com/evmos/ethermint/types"
 	"github.com/evmos/ethermint/x/evm/legacystatedb"
@@ -140,11 +139,13 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.In
 }
 
 func (k *Keeper) SetAccountLegacy(ctx sdk.Context, addr common.Address, account legacystatedb.Account) error {
-	k.SetAccount(ctx, addr, statedb.Account{
+	if err := k.SetAccount(ctx, addr, statedb.Account{
 		Nonce:         account.Nonce,
 		CodeHash:      account.CodeHash,
 		AccountNumber: 0,
-	})
+	}); err != nil {
+		return err
+	}
 
 	return k.SetBalance(ctx, addr, account.Balance)
 }
@@ -198,10 +199,6 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 		// "balance", account.Balance,
 	)
 	return nil
-}
-
-func (k *Keeper) getDenomAddressPrefixStore(ctx sdk.Context, denom string) prefix.Store {
-	return prefix.NewStore(ctx.KVStore(k.bankStoreKey), banktypes.CreateDenomAddressPrefix(denom))
 }
 
 func (k *Keeper) GetAccountNumber(ctx sdk.Context, addr common.Address) (uint64, bool) {
@@ -266,7 +263,9 @@ func (k *Keeper) ReassignAccountNumbers(ctx sdk.Context, addrs []common.Address)
 		}
 
 		// set account number
-		ethAcct.SetAccountNumber(accountNumberStart + uint64(i))
+		if err := ethAcct.SetAccountNumber(accountNumberStart + uint64(i)); err != nil {
+			return err
+		}
 		k.accountKeeper.SetAccount(ctx, acct)
 	}
 

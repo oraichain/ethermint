@@ -168,7 +168,7 @@ func (ch suicideChange) Dirtied() *common.Address {
 	return ch.account
 }
 
-func (ch balanceChange) Revert(s *StateDB) {
+func (ch balanceChange) Revert(_ *StateDB) {
 	// Do nothing, balance is reverted by SnapshotCommitCtx
 }
 

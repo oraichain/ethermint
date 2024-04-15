@@ -55,7 +55,7 @@ func (c *SnapshotCommitCtx) CurrentSnapshot() (CtxSnapshot, bool) {
 }
 
 // Snapshot creates a new branched context with the specified snapshot ID.
-func (c *SnapshotCommitCtx) Snapshot(snapshotId int) {
+func (c *SnapshotCommitCtx) Snapshot(snapshotID int) {
 	// Branch off a new CacheMultiStore + write function
 	newCtx, newWrite := c.CurrentCtx().CacheContext()
 
@@ -65,7 +65,7 @@ func (c *SnapshotCommitCtx) Snapshot(snapshotId int) {
 
 	// Save the new snapshot to the list
 	c.snapshots = append(c.snapshots, CtxSnapshot{
-		id:    snapshotId,
+		id:    snapshotID,
 		ctx:   newCtx,
 		write: newWrite,
 	})
