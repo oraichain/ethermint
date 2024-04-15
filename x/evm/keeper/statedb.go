@@ -140,9 +140,8 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.In
 
 func (k *Keeper) SetAccountLegacy(ctx sdk.Context, addr common.Address, account legacystatedb.Account) error {
 	if err := k.SetAccount(ctx, addr, statedb.Account{
-		Nonce:         account.Nonce,
-		CodeHash:      account.CodeHash,
-		AccountNumber: 0,
+		Nonce:    account.Nonce,
+		CodeHash: account.CodeHash,
 	}); err != nil {
 		return err
 	}
@@ -169,12 +168,6 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 	if ok {
 		if err := ethAcct.SetCodeHash(codeHash); err != nil {
 			return err
-		}
-
-		if account.AccountNumber != 0 {
-			if err := ethAcct.SetAccountNumber(account.AccountNumber); err != nil {
-				return err
-			}
 		}
 	}
 

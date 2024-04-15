@@ -242,49 +242,81 @@ func (suite *KeeperTestSuite) TestSetAccount() {
 		{
 			"new account, non-contract account",
 			tests.GenerateAddress(),
-			statedb.Account{10, types.EmptyCodeHash, 1},
+			statedb.Account{
+				Nonce: 10,
+				// Balance:,
+				CodeHash: types.EmptyCodeHash,
+			},
 			nil,
 		},
 		{
 			"new account, contract account",
 			tests.GenerateAddress(),
-			statedb.Account{10 /* big.NewInt(100),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
+			statedb.Account{
+				Nonce: 10,
+				// Balance: big.NewInt(100)
+				CodeHash: crypto.Keccak256Hash([]byte("some code hash")).Bytes(),
+			},
 			nil,
 		},
 		{
 			"existing eth account, non-contract account",
 			ethAddr,
-			statedb.Account{10 /* big.NewInt(1),*/, types.EmptyCodeHash, 0},
+			statedb.Account{
+				Nonce: 10,
+				// Balance: big.NewInt(1),
+				CodeHash: types.EmptyCodeHash,
+			},
 			nil,
 		},
 		{
 			"existing eth account, contract account",
 			ethAddr,
-			statedb.Account{10 /* big.NewInt(0),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
+			statedb.Account{
+				Nonce: 10,
+				// Balance: /* big.NewInt(0),*/,
+				CodeHash: crypto.Keccak256Hash([]byte("some code hash")).Bytes(),
+			},
 			nil,
 		},
 		{
 			"existing base account, non-contract account",
 			baseAddr,
-			statedb.Account{10 /* big.NewInt(10),*/, types.EmptyCodeHash, 0},
+			statedb.Account{
+				Nonce: 10,
+				// Balance: /* big.NewInt(10),*/,
+				CodeHash: types.EmptyCodeHash,
+			},
 			nil,
 		},
 		{
 			"existing base account, contract account",
 			baseAddr,
-			statedb.Account{10 /* big.NewInt(99),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
+			statedb.Account{
+				Nonce: 10,
+				// Balance: /* big.NewInt(99),*/,
+				CodeHash: crypto.Keccak256Hash([]byte("some code hash")).Bytes(),
+			},
 			nil,
 		},
 		{
 			"existing vesting account, non-contract account",
 			vestingAddr,
-			statedb.Account{10 /* big.NewInt(1000),*/, types.EmptyCodeHash, 0},
+			statedb.Account{
+				Nonce: 10,
+				// Balance: /* big.NewInt(1000),*/,
+				CodeHash: types.EmptyCodeHash,
+			},
 			nil,
 		},
 		{
 			"existing vesting account, contract account",
 			vestingAddr,
-			statedb.Account{10 /* big.NewInt(1001),*/, crypto.Keccak256Hash([]byte("some code hash")).Bytes(), 0},
+			statedb.Account{
+				Nonce: 10,
+				// Balance: /* big.NewInt(1001),*/,
+				CodeHash: crypto.Keccak256Hash([]byte("some code hash")).Bytes(),
+			},
 			types.ErrInvalidAccount,
 		},
 	}

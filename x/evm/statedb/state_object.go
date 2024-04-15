@@ -32,8 +32,6 @@ type Account struct {
 	// Balance is *not* included as it is managed by bank
 	Nonce    uint64
 	CodeHash []byte
-
-	AccountNumber uint64
 }
 
 // NewEmptyAccount returns an empty account.
@@ -79,10 +77,8 @@ type stateObject struct {
 	address common.Address
 
 	// flags
-	dirtyCode    bool
-	suicided     bool
-	isNew        bool // created in this tx
-	dirtyBalance bool // balance has changed
+	dirtyCode bool
+	suicided  bool
 }
 
 // newObject creates a state object.
@@ -90,7 +86,6 @@ func newObject(
 	db *StateDB,
 	address common.Address,
 	account Account,
-	isNew bool,
 ) *stateObject {
 	if account.CodeHash == nil {
 		account.CodeHash = emptyCodeHash
@@ -101,8 +96,6 @@ func newObject(
 		account:       account,
 		originStorage: make(Storage),
 		dirtyStorage:  make(Storage),
-		isNew:         isNew,
-		dirtyBalance:  false,
 	}
 }
 
@@ -111,14 +104,6 @@ func (s *stateObject) empty() bool {
 	return s.account.Nonce == 0 &&
 		s.Balance().Sign() == 0 &&
 		bytes.Equal(s.account.CodeHash, emptyCodeHash)
-}
-
-// createdByBankTransfer returns true if the account was created by an sdk bank
-// transfer, i.e. balance changed for an account that previously did not exist.
-// This is used to determine if the account number has been externally assigned
-// on balance change and should be re-assigned to match the Commit() order.
-func (s *stateObject) createdByBankTransfer() bool {
-	return s.isNew && s.dirtyBalance
 }
 
 func (s *stateObject) markSuicided() {
@@ -155,24 +140,9 @@ func (s *stateObject) SetBalance(amount *big.Int) {
 }
 
 func (s *stateObject) setBalance(amount *big.Int) {
-	logger := s.db.ctx.CurrentCtx().Logger().With("module", "statedb")
-
-	logger.Info(
-		"setBalance",
-		"address",
-		s.address.Hex(),
-		"prev_amount", s.Balance(),
-		"new_amount", amount,
-	)
-
 	if err := s.db.keeper.SetBalance(s.db.ctx.CurrentCtx(), s.address, amount); err != nil {
 		s.db.SetError(err)
 	}
-
-	// SetBalance will create the account if it doesn't exist yet, so we need to
-	// mark it as dirty to keep track of which accounts were created outside of
-	// Commit()
-	s.dirtyBalance = true
 }
 
 //

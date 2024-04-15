@@ -241,7 +241,7 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 		return nil
 	}
 	// Insert into the live set
-	obj := newObject(s, addr, *account, false)
+	obj := newObject(s, addr, *account)
 	s.setStateObject(obj)
 	return obj
 }
@@ -260,7 +260,7 @@ func (s *StateDB) getOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getStateObject(addr)
 
-	newobj = newObject(s, addr, Account{}, true)
+	newobj = newObject(s, addr, Account{})
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
@@ -489,53 +489,7 @@ func (s *StateDB) Commit() error {
 		return s.sdkError
 	}
 
-	logger := s.ctx.CurrentCtx().Logger().With("module", "statedb")
-
-	sortedDirties := s.journal.sortedDirties()
-
-	dirtyHex := make([]string, len(sortedDirties))
-	for i, addr := range sortedDirties {
-		dirtyHex[i] = addr.Hex()
-	}
-
-	logger.Info(
-		"committing state changes",
-		"num_dirties",
-		len(sortedDirties),
-		"dirties",
-		dirtyHex,
-	)
-
-	// Gather all the new account numbers
-	bankCreatedAcc := make(map[common.Address]bool)
-	var accNumbers []uint64
-	for _, addr := range sortedDirties {
-		obj := s.stateObjects[addr]
-
-		// Account was both created AND had a balance change
-		if obj.createdByBankTransfer() {
-			accNumber, found := s.keeper.GetAccountNumber(s.ctx.CurrentCtx(), obj.Address())
-
-			// The account could be missing if the transfer was less than 1ukava
-			// as the evmutil handles balances less than 1ukava without calling
-			// the bank.MintCoins which would create the account.
-			if !found {
-				continue
-			}
-
-			bankCreatedAcc[obj.Address()] = true
-			accNumbers = append(accNumbers, accNumber)
-		}
-	}
-
-	// Sort ascending account numbers
-	sort.Slice(accNumbers, func(i, j int) bool {
-		return accNumbers[i] < accNumbers[j]
-	})
-
-	currentAccNumberIdx := 0
-
-	for _, addr := range sortedDirties {
+	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
 		if obj.suicided {
 			if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), obj.Address()); err != nil {
@@ -544,13 +498,6 @@ func (s *StateDB) Commit() error {
 		} else {
 			if obj.code != nil && obj.dirtyCode {
 				s.keeper.SetCode(s.ctx.CurrentCtx(), obj.CodeHash(), obj.code)
-			}
-
-			// Re-assign account number to the next available number
-			if bankCreatedAcc[obj.Address()] {
-				accNumber := accNumbers[currentAccNumberIdx]
-				currentAccNumberIdx++
-				obj.account.AccountNumber = accNumber
 			}
 
 			if err := s.keeper.SetAccount(s.ctx.CurrentCtx(), obj.Address(), obj.account); err != nil {

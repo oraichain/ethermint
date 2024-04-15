@@ -299,7 +299,6 @@ func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) 
 		Nonce:    acct.GetSequence(),
 		CodeHash: codeHash,
 		// Balance:       nil,
-		AccountNumber: acct.GetAccountNumber(),
 	}
 }
 
