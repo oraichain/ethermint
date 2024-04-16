@@ -554,6 +554,25 @@ func (suite *KeeperTestSuite) TestState() {
 	}
 }
 
+func (suite *KeeperTestSuite) TestSetState_Delete() {
+	// Set state
+	key := common.BytesToHash([]byte("key"))
+	value := common.BytesToHash([]byte("value"))
+	suite.App.EvmKeeper.SetState(suite.Ctx, suite.Address, key, value)
+
+	// Check store if exists
+	storeKey := suite.App.GetKey(types.StoreKey)
+	store := prefix.NewStore(suite.Ctx.KVStore(storeKey), types.AddressStoragePrefix(suite.Address))
+
+	suite.Require().True(store.Has(key.Bytes()), "key/value should be set in store")
+
+	// Set state with empty value to delete
+	suite.App.EvmKeeper.SetState(suite.Ctx, suite.Address, key, common.Hash{})
+
+	// Check store if deleted
+	suite.Require().False(store.Has(key.Bytes()), "key/value should be deleted from store")
+}
+
 func (suite *KeeperTestSuite) TestCommittedState() {
 	key := common.BytesToHash([]byte("key"))
 	value1 := common.BytesToHash([]byte("value1"))
