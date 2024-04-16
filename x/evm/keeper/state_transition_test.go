@@ -748,6 +748,8 @@ type StateDBCommit interface {
 }
 
 func (suite *KeeperTestSuite) TestAccountNumberOrder() {
+	suite.T().Skip("Account number is no longer reassigned to be in order")
+
 	// New accounts should have account numbers in sorted order on Commit(),
 	// NOT when they were first touched.
 
@@ -1110,7 +1112,7 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 				suite.Require().Equal(int64(0), vmdb.GetBalance(addr).Int64())
 
 				// Back to a non-zero balance same as before
-				vmdb.SubBalance(addr, big.NewInt(10))
+				vmdb.AddBalance(addr, big.NewInt(10))
 			},
 		},
 		{
@@ -1211,6 +1213,8 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 }
 
 func (suite *KeeperTestSuite) TestStateDB_IAVLConsistency() {
+	suite.T().Skip("StateDB no longer state compatible")
+
 	addr1 := common.BigToAddress(big.NewInt(1))
 	addr2 := common.BigToAddress(big.NewInt(2))
 

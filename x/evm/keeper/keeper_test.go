@@ -3,10 +3,12 @@ package keeper_test
 import (
 	_ "embed"
 	"math/big"
+	"os"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/suite"
 
 	sdkmath "cosmossdk.io/math"
 
@@ -31,6 +33,15 @@ type KeeperTestSuite struct {
 var s *KeeperTestSuite
 
 func TestKeeperTestSuite(t *testing.T) {
+	if os.Getenv("benchmark") != "" {
+		t.Skip("Skipping Gingko Test")
+	}
+	s = new(KeeperTestSuite)
+	s.EnableFeemarket = false
+	s.EnableLondonHF = true
+	suite.Run(t, s)
+
+	// Run Ginkgo integration tests
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Keeper Suite")
 }
