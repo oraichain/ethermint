@@ -148,7 +148,7 @@ func (suite *KeeperTestSuite) TestLegacyParamsKeyTableRegistration() {
 	newKeeper := func() *keeper.Keeper {
 		// create a keeper, mimicking an app.go which has not registered the key table
 		return keeper.NewKeeper(
-			cdc, storeKey, tKey, nil, nil, authtypes.NewModuleAddress("gov"),
+			cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 			ak,
 			nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 			vm.NewEVM,
@@ -205,7 +205,7 @@ func (suite *KeeperTestSuite) TestRenamedFieldReturnsProperValueForLegacyParams(
 		"evm",
 	)
 	k := keeper.NewKeeper(
-		cdc, storeKey, tKey, nil, nil, authtypes.NewModuleAddress("gov"),
+		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 		ak,
 		nil, nil, nil,
 		vm.NewEVM,
@@ -238,7 +238,7 @@ func (suite *KeeperTestSuite) TestNilLegacyParamsDoNotPanic() {
 	)
 
 	k := keeper.NewKeeper(
-		cdc, storeKey, tKey, nil, nil, authtypes.NewModuleAddress("gov"),
+		cdc, storeKey, tKey, authtypes.NewModuleAddress("gov"),
 		ak,
 		nil, nil, nil, // OK to pass nil in for these since we only instantiate and use params
 		vm.NewEVM,

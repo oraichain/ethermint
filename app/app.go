@@ -425,7 +425,6 @@ func NewEthermintApp(
 	app.EvmKeeper = evmkeeper.NewKeeper(
 		appCodec,
 		keys[evmtypes.StoreKey], tkeys[evmtypes.TransientKey],
-		keys[banktypes.StoreKey], nil,
 		authtypes.NewModuleAddress(govtypes.ModuleName),
 		app.AccountKeeper, app.BankKeeper, stakingKeeper, app.FeeMarketKeeper,
 		vm.NewEVM, tracer, evmSs,

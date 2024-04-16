@@ -48,12 +48,6 @@ type Keeper struct {
 	// - storing Bloom filters by block height. Needed for the Web3 API.
 	storeKey storetypes.StoreKey
 
-	// Bank store key is required for StateDB state compatibility purposes,
-	// used only for removing dirty state from the cachekv for no-op balance
-	// changes.
-	bankStoreKey    storetypes.StoreKey
-	evmutilStoreKey storetypes.StoreKey
-
 	// key to access the transient store, which is reset on every block during Commit
 	transientKey storetypes.StoreKey
 
@@ -87,7 +81,6 @@ type Keeper struct {
 func NewKeeper(
 	cdc codec.BinaryCodec,
 	storeKey, transientKey storetypes.StoreKey,
-	bankStoreKey, evmutilStoreKey storetypes.StoreKey,
 	authority sdk.AccAddress,
 	ak types.AccountKeeper,
 	bankKeeper types.BankKeeper,
@@ -121,8 +114,6 @@ func NewKeeper(
 		feeMarketKeeper: fmk,
 		storeKey:        storeKey,
 		transientKey:    transientKey,
-		bankStoreKey:    bankStoreKey,
-		evmutilStoreKey: evmutilStoreKey,
 		evmConstructor:  evmConstructor,
 		tracer:          tracer,
 		ss:              ss,
