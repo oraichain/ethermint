@@ -29,7 +29,6 @@ import (
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethermint "github.com/evmos/ethermint/types"
-	"github.com/evmos/ethermint/x/evm/legacystatedb"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
@@ -49,23 +48,6 @@ func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Accou
 
 	// acct.Balance = k.GetBalance(ctx, addr)
 	return acct
-}
-
-func (k *Keeper) GetAccountLegacy(ctx sdk.Context, addr common.Address) *legacystatedb.Account {
-	acct := k.GetAccountWithoutBalance(ctx, addr)
-	if acct == nil {
-		return nil
-	}
-
-	bal := k.GetBalance(ctx, addr)
-
-	legacyAcct := &legacystatedb.Account{
-		Nonce:    acct.Nonce,
-		Balance:  bal,
-		CodeHash: acct.CodeHash,
-	}
-
-	return legacyAcct
 }
 
 // GetState loads contract state from database, implements `statedb.Keeper` interface.
@@ -136,17 +118,6 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.In
 		// not changed
 	}
 	return nil
-}
-
-func (k *Keeper) SetAccountLegacy(ctx sdk.Context, addr common.Address, account legacystatedb.Account) error {
-	if err := k.SetAccount(ctx, addr, statedb.Account{
-		Nonce:    account.Nonce,
-		CodeHash: account.CodeHash,
-	}); err != nil {
-		return err
-	}
-
-	return k.SetBalance(ctx, addr, account.Balance)
 }
 
 // SetAccount updates nonce/balance/codeHash together.
