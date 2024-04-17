@@ -110,10 +110,27 @@ func (s *stateObject) markSuicided() {
 	s.suicided = true
 }
 
+func (s *stateObject) touch() {
+	s.db.journal.append(touchChange{
+		account: &s.address,
+	})
+	if s.address == ripemd {
+		// https://github.com/ethereum/EIPs/issues/716
+		// Explicitly put it in the dirty-cache, which is otherwise generated from
+		// flattened journals.
+		s.db.journal.dirty(s.address)
+	}
+}
+
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
 func (s *stateObject) AddBalance(amount *big.Int) {
+	// EIP161: We must check emptiness for the objects such that the account
+	// clearing (0,0,0 objects) can take effect.
 	if amount.Sign() == 0 {
+		if s.empty() {
+			s.touch()
+		}
 		return
 	}
 	s.SetBalance(new(big.Int).Add(s.Balance(), amount))

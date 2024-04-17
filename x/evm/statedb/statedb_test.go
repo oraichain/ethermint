@@ -99,7 +99,7 @@ func (suite *HybridStateDBTestSuite) TestGetBalance_External() {
 			db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			tt.maleate(db)
 
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			// New db after Commit()
 			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
@@ -133,11 +133,13 @@ func (suite *HybridStateDBTestSuite) TestExist() {
 
 func (suite *HybridStateDBTestSuite) TestForEachStorage_Committed() {
 	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
+	// Set code to not clear account
+	db.SetCode(address, []byte("code"))
 	// Set some storage
 	db.SetState(address, common.BytesToHash([]byte("key")), common.BytesToHash([]byte("value")))
 
 	// Commit changes
-	suite.Require().NoError(db.Commit())
+	suite.Require().NoError(db.Commit(true))
 
 	// Create a new StateDB
 	db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
@@ -188,17 +190,25 @@ func (suite *HybridStateDBTestSuite) TestAccount() {
 			suite.Require().Equal(common.Hash{}, db.GetCodeHash(address))
 			suite.Require().Equal(uint64(0), db.GetNonce(address))
 		}},
-		{"empty account", func(db *statedb.StateDB) {
+		{"empty account - yes state clearing", func(db *statedb.StateDB) {
 			db.CreateAccount(address)
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			keeper := db.Keeper().(*keeper.Keeper)
 			acct := keeper.GetAccount(suite.Ctx, address)
-			states := suite.GetAllAccountStorage(suite.Ctx, address)
+			suite.Require().Nil(acct)
+		}},
+		{"empty account - no state clearing", func(db *statedb.StateDB) {
+			db.CreateAccount(address)
+			suite.Require().NoError(db.Commit(false))
 
+			keeper := db.Keeper().(*keeper.Keeper)
+			acct := keeper.GetAccount(suite.Ctx, address)
 			suite.Require().Equal(statedb.NewEmptyAccount(), acct)
-			suite.Require().Empty(states)
 			suite.Require().False(acct.IsContract())
+
+			states := suite.GetAllAccountStorage(suite.Ctx, address)
+			suite.Require().Empty(states)
 
 			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			suite.Require().Equal(true, db.Exist(address))
@@ -219,7 +229,7 @@ func (suite *HybridStateDBTestSuite) TestAccount() {
 			db.AddBalance(address, big.NewInt(100))
 			db.SetState(address, key1, value1)
 			db.SetState(address, key2, value2)
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			// suicide
 			db = statedb.New(suite.Ctx, db.Keeper(), emptyTxConfig)
@@ -234,7 +244,7 @@ func (suite *HybridStateDBTestSuite) TestAccount() {
 			suite.Require().Equal(value1, db.GetState(address, key1))
 			suite.Require().Equal([]byte("hello world"), db.GetCode(address))
 
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			// not accessible from StateDB anymore
 			db = statedb.New(suite.Ctx, db.Keeper(), emptyTxConfig)
@@ -307,7 +317,7 @@ func (suite *HybridStateDBTestSuite) TestDBError() {
 			db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 			tc.malleate(db)
 
-			err := db.Commit()
+			err := db.Commit(true)
 
 			suite.Require().Error(err)
 			suite.Require().ErrorContains(err, tc.errContains)
@@ -349,7 +359,7 @@ func (suite *HybridStateDBTestSuite) TestBalance() {
 
 			// check dirty state
 			suite.Require().Equal(tc.expBalance, db.GetBalance(address))
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 			// check committed balance too
 			suite.Require().Equal(tc.expBalance, keeper.GetBalance(suite.Ctx, address))
 		})
@@ -368,18 +378,21 @@ func (suite *HybridStateDBTestSuite) TestState() {
 		}, nil},
 
 		{"set empty value deletes", func(db *statedb.StateDB) {
+			db.SetCode(address, []byte("code"))
 			db.SetState(address, key1, common.Hash{})
 		}, map[common.Hash]common.Hash{}},
 
 		{"noop state change - empty", func(db *statedb.StateDB) {
+			db.SetCode(address, []byte("code"))
 			db.SetState(address, key1, value1)
 			db.SetState(address, key1, common.Hash{})
 		}, map[common.Hash]common.Hash{}},
 
 		{"noop state change - non-empty", func(db *statedb.StateDB) {
 			// Start with non-empty committed state
+			db.SetCode(address, []byte("code"))
 			db.SetState(address, key1, value1)
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			db.SetState(address, key1, common.Hash{})
 			db.SetState(address, key1, value1)
@@ -394,6 +407,7 @@ func (suite *HybridStateDBTestSuite) TestState() {
 			suite.Require().Equal(common.Hash{}, db.GetCommittedState(address, key1))
 
 			// set state
+			db.SetCode(address, []byte("code"))
 			db.SetState(address, key1, value1)
 			// query dirty state
 			suite.Require().Equal(value1, db.GetState(address, key1))
@@ -415,7 +429,7 @@ func (suite *HybridStateDBTestSuite) TestState() {
 			keeper := suite.App.EvmKeeper
 			db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
 			tc.malleate(db)
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			// check committed states in keeper
 			states := suite.GetAllAccountStorage(suite.Ctx, address)
@@ -447,13 +461,30 @@ func (suite *HybridStateDBTestSuite) TestCode() {
 		expCode     []byte
 		expCodeHash common.Hash
 	}{
-		{"non-exist account", func(*statedb.StateDB) {}, nil, common.Hash{}},
-		{"empty account", func(db *statedb.StateDB) {
-			db.CreateAccount(address)
-		}, nil, common.BytesToHash(emptyCodeHash)},
-		{"set code", func(db *statedb.StateDB) {
-			db.SetCode(address, code)
-		}, code, codeHash},
+		{
+			"non-exist account",
+			func(*statedb.StateDB) {},
+			nil,
+			common.Hash{},
+		},
+		{
+			"non-contract account",
+			func(db *statedb.StateDB) {
+				db.CreateAccount(address)
+				// Add balance to not clear the account
+				db.AddBalance(address, big.NewInt(100))
+			},
+			nil,
+			common.BytesToHash(emptyCodeHash),
+		},
+		{
+			"set code",
+			func(db *statedb.StateDB) {
+				db.SetCode(address, code)
+			},
+			code,
+			codeHash,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -467,7 +498,7 @@ func (suite *HybridStateDBTestSuite) TestCode() {
 			suite.Require().Equal(len(tc.expCode), db.GetCodeSize(address))
 			suite.Require().Equal(tc.expCodeHash, db.GetCodeHash(address))
 
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			// check again
 			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
@@ -537,7 +568,7 @@ func (suite *HybridStateDBTestSuite) TestRevertSnapshot() {
 				db.SetCode(address, []byte("hello world"))
 				db.SetState(address, v1, v2)
 				db.SetNonce(address2, 1)
-				suite.Require().NoError(db.Commit())
+				suite.Require().NoError(db.Commit(true))
 			}
 
 			originalState := xevm.ExportGenesis(suite.Ctx, keeper, suite.App.AccountKeeper)
@@ -552,7 +583,7 @@ func (suite *HybridStateDBTestSuite) TestRevertSnapshot() {
 			suite.Require().Zero(db.GetRefund())
 			suite.Require().Empty(db.Logs())
 
-			suite.Require().NoError(db.Commit())
+			suite.Require().NoError(db.Commit(true))
 
 			revertState := xevm.ExportGenesis(suite.Ctx, keeper, suite.App.AccountKeeper)
 
@@ -602,7 +633,7 @@ func (suite *HybridStateDBTestSuite) TestBalanceSnapshots() {
 	suite.Require().Equal(big.NewInt(10), db.GetBalance(address))
 
 	// commit
-	suite.Require().NoError(db.Commit())
+	suite.Require().NoError(db.Commit(true))
 
 	db = statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
 	// balance should be committed
@@ -771,13 +802,14 @@ func (suite *HybridStateDBTestSuite) TestIterateStorage() {
 
 	keeper := suite.App.EvmKeeper
 	db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
+	db.SetCode(address, []byte("code"))
 	db.SetState(address, key1, value1)
 	db.SetState(address, key2, value2)
 
 	// ForEachStorage only iterate committed state
 	suite.Require().Empty(CollectContractStorage(db))
 
-	suite.Require().NoError(db.Commit())
+	suite.Require().NoError(db.Commit(true))
 
 	storage := CollectContractStorage(db)
 	suite.Require().Equal(2, len(storage))

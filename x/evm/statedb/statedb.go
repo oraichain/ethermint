@@ -484,14 +484,14 @@ func (s *StateDB) SetError(err error) {
 
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
-func (s *StateDB) Commit() error {
+func (s *StateDB) Commit(deleteEmptyObjects bool) error {
 	if s.sdkError != nil {
 		return s.sdkError
 	}
 
 	for _, addr := range s.journal.sortedDirties() {
 		obj := s.stateObjects[addr]
-		if obj.suicided {
+		if obj.suicided || (deleteEmptyObjects && obj.empty()) {
 			if err := s.keeper.DeleteAccount(s.ctx.CurrentCtx(), obj.Address()); err != nil {
 				return errorsmod.Wrap(err, "failed to delete account")
 			}
