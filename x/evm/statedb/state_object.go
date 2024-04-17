@@ -21,30 +21,7 @@ import (
 	"sort"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
-
-var emptyCodeHash = crypto.Keccak256(nil)
-
-// Account is the Ethereum consensus representation of accounts.
-// These objects are stored in the storage of auth module.
-type Account struct {
-	// Balance is *not* included as it is managed by bank
-	Nonce    uint64
-	CodeHash []byte
-}
-
-// NewEmptyAccount returns an empty account.
-func NewEmptyAccount() *Account {
-	return &Account{
-		CodeHash: emptyCodeHash,
-	}
-}
-
-// IsContract returns if the account contains contract code.
-func (acct Account) IsContract() bool {
-	return !bytes.Equal(acct.CodeHash, emptyCodeHash)
-}
 
 // Storage represents in-memory cache/buffer of contract storage.
 type Storage map[common.Hash]common.Hash
