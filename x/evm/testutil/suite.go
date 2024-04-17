@@ -409,11 +409,11 @@ func (suite *TestSuite) TransferValue(
 		return nil, nil, err
 	}
 
-	return suite.TransferValueWithGas(from, to, res.Gas, amount)
+	return suite.TransferValueWithGas(to, res.Gas, amount)
 }
 
 func (suite *TestSuite) TransferValueWithGas(
-	from, to common.Address,
+	to common.Address,
 	gas uint64,
 	amount *big.Int,
 ) (*types.MsgEthereumTx, *types.MsgEthereumTxResponse, error) {
