@@ -38,7 +38,6 @@ type Keeper interface {
 	// Read methods
 	GetAccount(ctx sdk.Context, addr common.Address) *Account
 	GetBalance(ctx sdk.Context, addr common.Address) *big.Int
-	GetAccountNumber(ctx sdk.Context, addr common.Address) (uint64, bool)
 	GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash
 	GetCode(ctx sdk.Context, codeHash common.Hash) []byte
 	// the callback returns false to break early
