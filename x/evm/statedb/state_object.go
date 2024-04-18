@@ -104,6 +104,11 @@ func (s *stateObject) touch() {
 func (s *stateObject) AddBalance(amount *big.Int) {
 	// EIP161: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
+
+	// The only state changes that can actually result in an empty account are
+	// transactions, e.g. CALL, SUICIDE, with zero value transferred to this
+	// account, so this is the only area where the account marked as touched.
+	// See: EIP-161 Notes - https://eips.ethereum.org/EIPS/eip-161
 	if amount.Sign() == 0 {
 		if s.empty() {
 			s.touch()
