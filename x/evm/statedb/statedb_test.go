@@ -451,6 +451,87 @@ func (suite *HybridStateDBTestSuite) TestState() {
 	}
 }
 
+func (suite *HybridStateDBTestSuite) TestStateClearing() {
+	key1 := common.BigToHash(big.NewInt(1))
+	value1 := common.BigToHash(big.NewInt(1))
+
+	testCases := []struct {
+		name        string
+		malleate    func(*statedb.StateDB)
+		expectEmpty bool
+	}{
+		{
+			"empty",
+			func(db *statedb.StateDB) {
+				db.CreateAccount(address)
+			},
+			true,
+		},
+		{
+			"code",
+			func(db *statedb.StateDB) {
+				db.SetCode(address, []byte("code"))
+			},
+			false,
+		},
+		{
+			"state",
+			func(db *statedb.StateDB) {
+				// An account cannot have ONLY state and no code, as state only
+				// exists for contracts. If there is state, then there must be code.
+				db.SetCode(address, []byte("code"))
+				db.SetState(address, key1, value1)
+			},
+			false,
+		},
+		{
+			"balance",
+			func(db *statedb.StateDB) {
+				db.AddBalance(address, big.NewInt(100))
+			},
+			false,
+		},
+		{
+			"nonce",
+			func(db *statedb.StateDB) {
+				db.SetNonce(address, 1)
+			},
+			false,
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.Run(tc.name, func() {
+			suite.SetupTest()
+
+			keeper := suite.App.EvmKeeper
+			db := statedb.New(suite.Ctx, keeper, emptyTxConfig)
+			tc.malleate(db)
+			suite.Require().NoError(db.Commit(true))
+
+			// Get account
+			acc := keeper.GetAccount(suite.Ctx, address)
+			if tc.expectEmpty {
+				suite.Require().Nil(acc)
+			} else {
+				suite.Require().NotNil(acc)
+			}
+
+			// Try again WITHOUT state clearing
+			suite.SetupTest()
+			keeper = suite.App.EvmKeeper
+			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
+			tc.malleate(db)
+			suite.Require().NoError(db.Commit(false))
+
+			// Get account
+			acc = keeper.GetAccount(suite.Ctx, address)
+			suite.Require().NotNil(acc, "no accounts should be cleared if state clearing is not enabled")
+		})
+	}
+
+}
+
 func (suite *HybridStateDBTestSuite) TestCode() {
 	code := []byte("hello world")
 	codeHash := crypto.Keccak256Hash(code)

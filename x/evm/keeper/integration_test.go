@@ -497,6 +497,8 @@ func (suite *IntegrationTestSuite) TestEIP161_TouchEmptyDeletes() {
 	for _, tt := range tests {
 		suite.Run(tt.name, func() {
 			// Setup test
+			suite.SetupTest()
+
 			// Deploy contract
 			contractAddr = suite.DeployContract(testutil.EIP161TestContract)
 
