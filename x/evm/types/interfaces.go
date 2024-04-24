@@ -16,6 +16,7 @@
 package types
 
 import (
+	"github.com/ethereum/go-ethereum/precompile/contract"
 	"math/big"
 
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
@@ -62,6 +63,11 @@ type FeeMarketKeeper interface {
 	GetBaseFee(ctx sdk.Context) *big.Int
 	GetParams(ctx sdk.Context) feemarkettypes.Params
 	AddTransientGasWanted(ctx sdk.Context, gasWanted uint64) (uint64, error)
+}
+
+type EvmutilKeeper interface {
+	IsEnabled(blockHeight uint64, address string) bool
+	GetEnabledPrecompiles() []contract.StatefulPrecompiledContract
 }
 
 // Event Hooks
