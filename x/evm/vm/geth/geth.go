@@ -46,9 +46,10 @@ func NewEVM(
 	chainConfig *params.ChainConfig,
 	config vm.Config,
 	_ evm.PrecompiledContracts, // unused
+	precompilesMetadata []*vm.PrecompileMetadata,
 ) evm.EVM {
 	return &EVM{
-		EVM: vm.NewEVM(blockCtx, txCtx, stateDB, chainConfig, config),
+		EVM: vm.NewEVM(blockCtx, txCtx, stateDB, chainConfig, config, precompilesMetadata),
 	}
 }
 

@@ -51,6 +51,7 @@ func (k *Keeper) NewEVM(
 	cfg *statedb.EVMConfig,
 	tracer vm.EVMLogger,
 	stateDB vm.StateDB,
+	precompilesMetadata []*vm.PrecompileMetadata,
 ) evm.EVM {
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
@@ -70,7 +71,7 @@ func (k *Keeper) NewEVM(
 		tracer = k.Tracer(ctx, msg, cfg.ChainConfig)
 	}
 	vmConfig := k.VMConfig(ctx, msg, cfg, tracer)
-	return k.evmConstructor(blockCtx, txCtx, stateDB, cfg.ChainConfig, vmConfig, k.customPrecompiles)
+	return k.evmConstructor(blockCtx, txCtx, stateDB, cfg.ChainConfig, vmConfig, k.customPrecompiles, precompilesMetadata)
 }
 
 // GetHashFn implements vm.GetHashFunc for Ethermint. It handles 3 cases:
@@ -329,9 +330,9 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	enabledPrecompiles := k.evmutilKeeper.GetEnabledPrecompiles()
+	precompilesMetadata := k.evmutilKeeper.GetPrecompilesMetadata()
 	stateDB := statedb.New(ctx, k, txConfig)
-	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
+	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB, precompilesMetadata)
 
 	leftoverGas := msg.Gas()
 

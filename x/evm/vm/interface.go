@@ -82,4 +82,5 @@ type Constructor func(
 	chainConfig *params.ChainConfig,
 	config vm.Config,
 	customPrecompiles PrecompiledContracts,
+	precompilesMetadata []*vm.PrecompileMetadata,
 ) EVM
