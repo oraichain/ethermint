@@ -308,7 +308,8 @@ func (k *Keeper) ApplyMessage(ctx sdk.Context, msg core.Message, tracer vm.EVMLo
 // # Commit parameter
 //
 // If commit is true, the `StateDB` will be committed, otherwise discarded.
-func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
+func (k *Keeper) ApplyMessageWithConfig(
+	ctx sdk.Context,
 	msg core.Message,
 	tracer vm.EVMLogger,
 	commit bool,
@@ -326,6 +327,9 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	} else if !cfg.Params.EnableCall && msg.To() != nil {
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
+
+	// TODO: Add precompileKeeper -- we also need this to pass to k.NewEVM
+	enabledPrecompiles := k.precompileKeeper.GetEnabledPrecompiles(ctx)
 
 	stateDB := statedb.New(ctx, k, txConfig)
 	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
@@ -361,7 +365,10 @@ func (k *Keeper) ApplyMessageWithConfig(ctx sdk.Context,
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
 	if rules := cfg.ChainConfig.Rules(big.NewInt(ctx.BlockHeight()), cfg.ChainConfig.MergeNetsplitBlock != nil); rules.IsBerlin {
-		stateDB.PrepareAccessList(msg.From(), msg.To(), vm.ActivePrecompiles(rules), msg.AccessList())
+		// Stateless precompiles internal to geth + enabled precompiles from x/precompiles
+		allPrecompileAddrs := vm.ActiveStatelessPrecompiles(rules)
+		allPrecompileAddrs = append(allPrecompileAddrs, enabledPrecompiles...)
+		stateDB.PrepareAccessList(msg.From(), msg.To(), allPrecompileAddrs, msg.AccessList())
 	}
 
 	if contractCreation {

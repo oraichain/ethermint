@@ -17,6 +17,7 @@ package keeper
 
 import (
 	"math/big"
+	"os"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/cometbft/cometbft/libs/log"
@@ -29,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
 	"github.com/ethereum/go-ethereum/params"
 
 	ethermint "github.com/evmos/ethermint/types"
@@ -268,7 +270,30 @@ func (k *Keeper) PostTxProcessing(ctx sdk.Context, msg core.Message, receipt *et
 
 // Tracer return a default vm.Tracer based on current keeper state
 func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainConfig) vm.EVMLogger {
-	return types.NewTracer(k.tracer, msg, ethCfg, ctx.BlockHeight())
+	// TODO: enable additional log configuration
+	logCfg := &logger.Config{
+		Debug: true,
+	}
+
+	switch k.tracer {
+	case types.TracerAccessList:
+
+		// Renamed vm.ActivePrecompiles -> vm.ActiveStatelessPrecompiles
+		allPrecompiles := vm.ActiveStatelessPrecompiles(ethCfg.Rules(big.NewInt(ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil))
+		// Include stateful precompiles enabled at this block
+		activeStatefulPrecompiles := k.precompileKeeper.GetEnabledPrecompiles(ctx)
+		allPrecompiles = append(allPrecompiles, activeStatefulPrecompiles...)
+
+		return logger.NewAccessListTracer(msg.AccessList(), msg.From(), *msg.To(), allPrecompiles)
+	case types.TracerJSON:
+		return logger.NewJSONLogger(logCfg, os.Stderr)
+	case types.TracerMarkdown:
+		return logger.NewMarkdownLogger(logCfg, os.Stdout) // TODO: Stderr ?
+	case types.TracerStruct:
+		return logger.NewStructLogger(logCfg)
+	default:
+		return types.NewNoOpTracer()
+	}
 }
 
 // GetAccountWithoutBalance load nonce and codehash without balance,
