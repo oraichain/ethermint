@@ -155,24 +155,6 @@ func (suite *HybridStateDBTestSuite) TestForEachStorage_Committed() {
 	suite.Require().Equal(common.BytesToHash([]byte("key")), keys[0], "expected key to be found")
 }
 
-func (suite *HybridStateDBTestSuite) TestForEachStorage_Dirty() {
-	suite.T().Skip("TODO: identify if ForEachStorage should return new keys")
-
-	db := statedb.New(suite.Ctx, suite.App.EvmKeeper, emptyTxConfig)
-	// Set some storage
-	db.SetState(address, common.BytesToHash([]byte("key")), common.BytesToHash([]byte("value")))
-
-	// Iterate over storage
-	var keys []common.Hash
-	db.ForEachStorage(address, func(key, value common.Hash) bool {
-		keys = append(keys, key)
-		return false
-	})
-
-	suite.Require().Len(keys, 1, "expected 1 key")
-	suite.Require().Equal(common.BytesToHash([]byte("key")), keys[0], "expected key to be found")
-}
-
 func (suite *HybridStateDBTestSuite) TestAccount() {
 	key1 := common.BigToHash(big.NewInt(1))
 	value1 := common.BigToHash(big.NewInt(2))
@@ -183,8 +165,8 @@ func (suite *HybridStateDBTestSuite) TestAccount() {
 		malleate func(*statedb.StateDB)
 	}{
 		{"non-exist account", func(db *statedb.StateDB) {
-			suite.Require().Equal(false, db.Exist(address))
-			suite.Require().Equal(true, db.Empty(address))
+			suite.Require().False(db.Exist(address))
+			suite.Require().True(db.Empty(address))
 			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
 			suite.Require().Equal([]byte(nil), db.GetCode(address))
 			suite.Require().Equal(common.Hash{}, db.GetCodeHash(address))
@@ -211,8 +193,8 @@ func (suite *HybridStateDBTestSuite) TestAccount() {
 			suite.Require().Empty(states)
 
 			db = statedb.New(suite.Ctx, keeper, emptyTxConfig)
-			suite.Require().Equal(true, db.Exist(address))
-			suite.Require().Equal(true, db.Empty(address))
+			suite.Require().True(db.Exist(address))
+			suite.Require().True(db.Empty(address))
 			suite.Require().Equal(big.NewInt(0), db.GetBalance(address))
 			suite.Require().Equal([]byte(nil), db.GetCode(address))
 			suite.Require().Equal(common.BytesToHash(emptyCodeHash), db.GetCodeHash(address))
