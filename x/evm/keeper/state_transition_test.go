@@ -24,6 +24,7 @@ import (
 	"github.com/evmos/ethermint/tests"
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
+	"github.com/evmos/ethermint/x/evm/testutil"
 	"github.com/evmos/ethermint/x/evm/types"
 	"github.com/evmos/ethermint/x/evm/types/mocks"
 )
@@ -957,78 +958,80 @@ func (suite *KeeperTestSuite) SetEVMPrecompileKeeper(
 	tracer string,
 ) {
 	evmKeeper := keeper.NewKeeper(
-		suite.app.AppCodec(),
-		suite.app.GetKey(types.StoreKey),
-		suite.app.GetTKey(types.TransientKey),
+		suite.App.AppCodec(),
+		suite.App.GetKey(types.StoreKey),
+		suite.App.GetTKey(types.TransientKey),
 		authtypes.NewModuleAddress(govtypes.ModuleName), // authority
-		suite.app.AccountKeeper,
-		suite.app.BankKeeper,
-		suite.app.StakingKeeper,
-		suite.app.FeeMarketKeeper,
+		suite.App.AccountKeeper,
+		suite.App.BankKeeper,
+		suite.App.StakingKeeper,
+		suite.App.FeeMarketKeeper,
 		precompileKeeper,
 		vm.NewEVM,
 		tracer,
-		suite.app.GetSubspace(types.ModuleName),
+		suite.App.GetSubspace(types.ModuleName),
 	)
 
-	suite.app.EvmKeeper = evmKeeper
+	suite.App.EvmKeeper = evmKeeper
 }
 
 func (suite *KeeperTestSuite) TestPrecompileAccessList() {
 	suite.SetupTest()
 
-	contractAddr := common.BytesToAddress([]byte("contract"))
-
 	precompileKeeper := mocks.NewPrecompileKeeper(suite.T())
-	precompileKeeper.EXPECT().GetPrecompileAddresses(suite.ctx).Return(nil).Once()
+	// Mock returns TWICE instead of once since Deploy + Call
+	precompileKeeper.EXPECT().GetPrecompileAddresses(suite.Ctx).
+		Return(nil). // No additional contracts added to access list
+		Twice()
 
 	// Update app keeper with the mock precompile keeper
-	// TracerJSON does *not* use access_list
-	suite.SetEVMPrecompileKeeper(precompileKeeper, types.TracerJSON)
+	// empty tracer does *not* use access_list - test separately
+	suite.SetEVMPrecompileKeeper(precompileKeeper, "")
 
-	proposerAddress := suite.ctx.BlockHeader().ProposerAddress
-	config, err := suite.app.EvmKeeper.EVMConfig(suite.ctx, proposerAddress, big.NewInt(9000))
-	suite.Require().NoError(err)
+	// --------------------------------------------------------------------------
+	// Deploy contract that loads state according to EIP2929
+	// ---
+	// Why do we need a contract that calls another one?
+	// The initial contract load does not use the access list - i.e. calling
+	// contractAddr is not considered for the dynamic gas cost.
+	// EIP2929 additional gas cost only applies to __opcodes__ that load state,
+	// so within the contract itself that loads state or calls another contract.
+	// Loading the initial contract does not use such opcodes.
 
-	keeperParams := suite.app.EvmKeeper.GetParams(suite.ctx)
-	chainCfg := keeperParams.ChainConfig.EthereumConfig(suite.app.EvmKeeper.ChainID())
-	signer := ethtypes.LatestSignerForChainID(suite.app.EvmKeeper.ChainID())
-	txConfig := suite.app.EvmKeeper.TxConfig(suite.ctx, common.Hash{})
+	contractAddr := suite.DeployContract(testutil.EIP2929TestContract)
 
-	tx := types.NewTx(
-		chainCfg.ChainID,
-		suite.StateDB().GetNonce(suite.address),
-		&contractAddr,
-		nil,
-		params.TxGas,
-		nil,
-		nil, nil,
-		nil,
-		nil,
+	targetAddr := common.BytesToAddress([]byte("target"))
+	_, txResp1, err := suite.CallContract(
+		testutil.EIP2929TestContract,
+		contractAddr,
+		common.Big0,
+		"callAccount",
+		targetAddr,
 	)
 
-	tx.From = suite.address.Hex()
-
-	err = tx.Sign(ethtypes.LatestSignerForChainID(chainCfg.ChainID), suite.signer)
 	suite.Require().NoError(err)
+	suite.Require().False(txResp1.Failed())
 
-	msg, err := tx.AsMessage(signer, config.BaseFee)
-	suite.Require().NoError(err)
+	precompileKeeper.EXPECT().GetPrecompileAddresses(suite.Ctx).
+		Return([]common.Address{targetAddr}). // Add contract to access list
+		Once()
 
-	res, err := suite.app.EvmKeeper.ApplyMessageWithConfig(suite.ctx, msg, nil, true, config, txConfig)
-	suite.Require().NoError(err)
-
-	// ---
-	// Direct to a contract x: access list is not used - extra eip2929 gas is not deducted
-	// OPCODEs that call another contract / load state - eip2929 dynamic gas is applied
-
-	// TODO: Test for access list modification towards gas
-	// - create a test contract that calls another contract, with it added to
-	//   precompile addresses list and with it not to compare gas consumption
+	_, txResp2, err := suite.CallContract(
+		testutil.EIP2929TestContract,
+		contractAddr,
+		common.Big0,
+		"callAccount",
+		targetAddr,
+	)
 
 	suite.Require().NoError(err)
-	suite.Require().False(res.Failed())
-	suite.Require().Equal(params.TxGas, res.GasUsed)
+	suite.Require().False(txResp2.Failed())
 
-	suite.T().Logf("Res: %+v", res)
+	// Check if gas is less than the previous call
+	suite.Require().Less(txResp2.GasUsed, txResp1.GasUsed)
+
+	// COLD_ACCOUNT_ACCESS_COST - WARM_STORAGE_READ_COST
+	// Refer to table: https://eips.ethereum.org/EIPS/eip-2929
+	eip2929AdditionalGas := uint64(2600 - 100)
+	suite.Require().Equal(txResp2.GasUsed+eip2929AdditionalGas, txResp1.GasUsed)
 }
