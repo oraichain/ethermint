@@ -328,8 +328,7 @@ func (k *Keeper) ApplyMessageWithConfig(
 		return nil, errorsmod.Wrap(types.ErrCallDisabled, "failed to call contract")
 	}
 
-	// TODO: Add precompileKeeper -- we also need this to pass to k.NewEVM
-	enabledPrecompiles := k.precompileKeeper.GetEnabledPrecompiles(ctx)
+	enabledPrecompiles := k.precompileKeeper.GetPrecompileAddresses(ctx)
 
 	stateDB := statedb.New(ctx, k, txConfig)
 	evm := k.NewEVM(ctx, msg, cfg, tracer, stateDB)
@@ -365,8 +364,10 @@ func (k *Keeper) ApplyMessageWithConfig(
 	// access list preparation is moved from ante handler to here, because it's needed when `ApplyMessage` is called
 	// under contexts where ante handlers are not run, for example `eth_call` and `eth_estimateGas`.
 	if rules := cfg.ChainConfig.Rules(big.NewInt(ctx.BlockHeight()), cfg.ChainConfig.MergeNetsplitBlock != nil); rules.IsBerlin {
-		// Stateless precompiles internal to geth + enabled precompiles from x/precompiles
-		allPrecompileAddrs := vm.ActiveStatelessPrecompiles(rules)
+		// Add all precompiles to access list:
+		// 1. Stateless precompiles internal to geth
+		// 2. Enabled precompiles from x/precompiles
+		allPrecompileAddrs := vm.ActivePrecompiles(rules)
 		allPrecompileAddrs = append(allPrecompileAddrs, enabledPrecompiles...)
 		stateDB.PrepareAccessList(msg.From(), msg.To(), allPrecompileAddrs, msg.AccessList())
 	}

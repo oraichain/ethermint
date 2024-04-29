@@ -63,6 +63,8 @@ type Keeper struct {
 	stakingKeeper types.StakingKeeper
 	// fetch EIP1559 base fee and parameters
 	feeMarketKeeper types.FeeMarketKeeper
+	// access to module managed precompiled contract addresses
+	precompileKeeper types.PrecompileKeeper
 
 	// chain ID number obtained from the context's chain id
 	eip155ChainID *big.Int
@@ -88,6 +90,7 @@ func NewKeeper(
 	bankKeeper types.BankKeeper,
 	sk types.StakingKeeper,
 	fmk types.FeeMarketKeeper,
+	precompileKeeper types.PrecompileKeeper,
 	evmConstructor types.Constructor,
 	tracer string,
 	ss paramstypes.Subspace,
@@ -106,19 +109,28 @@ func NewKeeper(
 		ss = ss.WithKeyTable(legacytypes.ParamKeyTable())
 	}
 
+	// If no precompile keeper is provided, use the default keeper.
+	// This keeper returns an empty list of stateful precompile addresses,
+	// effectively disabling all stateful precompiles. Existing vanilla
+	// stateless geth-native precompiles are still available.
+	if precompileKeeper == nil {
+		precompileKeeper = types.DefaultPrecompileKeeper{}
+	}
+
 	// NOTE: we pass in the parameter space to the CommitStateDB in order to use custom denominations for the EVM operations
 	return &Keeper{
-		cdc:             cdc,
-		authority:       authority,
-		accountKeeper:   ak,
-		bankKeeper:      bankKeeper,
-		stakingKeeper:   sk,
-		feeMarketKeeper: fmk,
-		storeKey:        storeKey,
-		transientKey:    transientKey,
-		evmConstructor:  evmConstructor,
-		tracer:          tracer,
-		ss:              ss,
+		cdc:              cdc,
+		authority:        authority,
+		accountKeeper:    ak,
+		bankKeeper:       bankKeeper,
+		stakingKeeper:    sk,
+		feeMarketKeeper:  fmk,
+		precompileKeeper: precompileKeeper,
+		storeKey:         storeKey,
+		transientKey:     transientKey,
+		evmConstructor:   evmConstructor,
+		tracer:           tracer,
+		ss:               ss,
 	}
 }
 
@@ -277,11 +289,11 @@ func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainCo
 
 	switch k.tracer {
 	case types.TracerAccessList:
+		chainRules := ethCfg.Rules(big.NewInt(ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil)
+		allPrecompiles := vm.ActivePrecompiles(chainRules)
 
-		// Renamed vm.ActivePrecompiles -> vm.ActiveStatelessPrecompiles
-		allPrecompiles := vm.ActiveStatelessPrecompiles(ethCfg.Rules(big.NewInt(ctx.BlockHeight()), ethCfg.MergeNetsplitBlock != nil))
 		// Include stateful precompiles enabled at this block
-		activeStatefulPrecompiles := k.precompileKeeper.GetEnabledPrecompiles(ctx)
+		activeStatefulPrecompiles := k.precompileKeeper.GetPrecompileAddresses(ctx)
 		allPrecompiles = append(allPrecompiles, activeStatefulPrecompiles...)
 
 		return logger.NewAccessListTracer(msg.AccessList(), msg.From(), *msg.To(), allPrecompiles)

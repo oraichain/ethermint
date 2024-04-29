@@ -12,7 +12,9 @@ import (
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/store/iavl"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -23,6 +25,7 @@ import (
 	"github.com/evmos/ethermint/x/evm/keeper"
 	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
+	"github.com/evmos/ethermint/x/evm/types/mocks"
 )
 
 func (suite *KeeperTestSuite) TestGetHashFn() {
@@ -947,4 +950,85 @@ func (suite *KeeperTestSuite) TestNoopStateChange_UnmodifiedIAVLTree() {
 			suite.Require().Equal(iavlHashes1, iavlHashes2)
 		})
 	}
+}
+
+func (suite *KeeperTestSuite) SetEVMPrecompileKeeper(
+	precompileKeeper types.PrecompileKeeper,
+	tracer string,
+) {
+	evmKeeper := keeper.NewKeeper(
+		suite.app.AppCodec(),
+		suite.app.GetKey(types.StoreKey),
+		suite.app.GetTKey(types.TransientKey),
+		authtypes.NewModuleAddress(govtypes.ModuleName), // authority
+		suite.app.AccountKeeper,
+		suite.app.BankKeeper,
+		suite.app.StakingKeeper,
+		suite.app.FeeMarketKeeper,
+		precompileKeeper,
+		vm.NewEVM,
+		tracer,
+		suite.app.GetSubspace(types.ModuleName),
+	)
+
+	suite.app.EvmKeeper = evmKeeper
+}
+
+func (suite *KeeperTestSuite) TestPrecompileAccessList() {
+	suite.SetupTest()
+
+	contractAddr := common.BytesToAddress([]byte("contract"))
+
+	precompileKeeper := mocks.NewPrecompileKeeper(suite.T())
+	precompileKeeper.EXPECT().GetPrecompileAddresses(suite.ctx).Return(nil).Once()
+
+	// Update app keeper with the mock precompile keeper
+	// TracerJSON does *not* use access_list
+	suite.SetEVMPrecompileKeeper(precompileKeeper, types.TracerJSON)
+
+	proposerAddress := suite.ctx.BlockHeader().ProposerAddress
+	config, err := suite.app.EvmKeeper.EVMConfig(suite.ctx, proposerAddress, big.NewInt(9000))
+	suite.Require().NoError(err)
+
+	keeperParams := suite.app.EvmKeeper.GetParams(suite.ctx)
+	chainCfg := keeperParams.ChainConfig.EthereumConfig(suite.app.EvmKeeper.ChainID())
+	signer := ethtypes.LatestSignerForChainID(suite.app.EvmKeeper.ChainID())
+	txConfig := suite.app.EvmKeeper.TxConfig(suite.ctx, common.Hash{})
+
+	tx := types.NewTx(
+		chainCfg.ChainID,
+		suite.StateDB().GetNonce(suite.address),
+		&contractAddr,
+		nil,
+		params.TxGas,
+		nil,
+		nil, nil,
+		nil,
+		nil,
+	)
+
+	tx.From = suite.address.Hex()
+
+	err = tx.Sign(ethtypes.LatestSignerForChainID(chainCfg.ChainID), suite.signer)
+	suite.Require().NoError(err)
+
+	msg, err := tx.AsMessage(signer, config.BaseFee)
+	suite.Require().NoError(err)
+
+	res, err := suite.app.EvmKeeper.ApplyMessageWithConfig(suite.ctx, msg, nil, true, config, txConfig)
+	suite.Require().NoError(err)
+
+	// ---
+	// Direct to a contract x: access list is not used - extra eip2929 gas is not deducted
+	// OPCODEs that call another contract / load state - eip2929 dynamic gas is applied
+
+	// TODO: Test for access list modification towards gas
+	// - create a test contract that calls another contract, with it added to
+	//   precompile addresses list and with it not to compare gas consumption
+
+	suite.Require().NoError(err)
+	suite.Require().False(res.Failed())
+	suite.Require().Equal(params.TxGas, res.GasUsed)
+
+	suite.T().Logf("Res: %+v", res)
 }
