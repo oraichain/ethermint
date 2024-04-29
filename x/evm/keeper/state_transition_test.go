@@ -1063,3 +1063,65 @@ func (suite *KeeperTestSuite) TestPrecompileAccessList() {
 		})
 	}
 }
+
+func (suite *KeeperTestSuite) TestPrecompileAccessList_DefaultKeeper() {
+	// This test uses DefaultPrecompileKeeper which always returns nil for the
+	// list of custom precompiles. ie. no extra gas cost exemption for custom
+	// precompile.
+
+	var contractAddr common.Address
+	suite.Require().NotPanics(func() {
+		contractAddr = suite.DeployContract(testutil.EIP2929TestContract)
+	}, "default precompile keeper should not panic on contract deployment")
+
+	tests := []struct {
+		name   string
+		method string
+	}{
+		{
+			"CALL",
+			"callAccount",
+		},
+		{
+			"BALANCE",
+			"getAccountBalance",
+		},
+		{
+			"EXTCODESIZE",
+			"getAccountCodeSize",
+		},
+	}
+
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			targetAddr := common.BytesToAddress([]byte("target"))
+			_, txResp1, err := suite.CallContract(
+				testutil.EIP2929TestContract,
+				contractAddr,
+				common.Big0,
+				tt.method,
+				targetAddr,
+			)
+
+			suite.Require().NoError(err)
+			suite.Require().False(txResp1.Failed())
+
+			_, txResp2, err := suite.CallContract(
+				testutil.EIP2929TestContract,
+				contractAddr,
+				common.Big0,
+				tt.method,
+				targetAddr,
+			)
+
+			suite.Require().NoError(err)
+			suite.Require().False(txResp2.Failed())
+
+			suite.Require().Equal(
+				txResp1.GasUsed,
+				txResp2.GasUsed,
+				"gas used should be the same without custom precompile addresses in access list",
+			)
+		})
+	}
+}
