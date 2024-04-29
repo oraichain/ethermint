@@ -976,8 +976,6 @@ func (suite *KeeperTestSuite) SetEVMPrecompileKeeper(
 }
 
 func (suite *KeeperTestSuite) TestPrecompileAccessList() {
-	suite.SetupTest()
-
 	precompileKeeper := mocks.NewPrecompileKeeper(suite.T())
 
 	// Update app keeper with the mock precompile keeper
