@@ -979,10 +979,6 @@ func (suite *KeeperTestSuite) TestPrecompileAccessList() {
 	suite.SetupTest()
 
 	precompileKeeper := mocks.NewPrecompileKeeper(suite.T())
-	// Mock returns TWICE instead of once since Deploy + Call
-	precompileKeeper.EXPECT().GetPrecompileAddresses(suite.Ctx).
-		Return(nil). // No additional contracts added to access list
-		Twice()
 
 	// Update app keeper with the mock precompile keeper
 	// empty tracer does *not* use access_list - test separately
@@ -998,40 +994,74 @@ func (suite *KeeperTestSuite) TestPrecompileAccessList() {
 	// so within the contract itself that loads state or calls another contract.
 	// Loading the initial contract does not use such opcodes.
 
+	// Deploy will call this
+	precompileKeeper.EXPECT().GetPrecompileAddresses(suite.Ctx).
+		Return(nil). // Not applicable for contract deployment
+		Once()
 	contractAddr := suite.DeployContract(testutil.EIP2929TestContract)
 
-	targetAddr := common.BytesToAddress([]byte("target"))
-	_, txResp1, err := suite.CallContract(
-		testutil.EIP2929TestContract,
-		contractAddr,
-		common.Big0,
-		"callAccount",
-		targetAddr,
-	)
+	tests := []struct {
+		name   string
+		method string
+	}{
+		{
+			"CALL",
+			"callAccount",
+		},
+		{
+			"BALANCE",
+			"getAccountBalance",
+		},
+		{
+			"EXTCODESIZE",
+			"getAccountCodeSize",
+		},
+	}
 
-	suite.Require().NoError(err)
-	suite.Require().False(txResp1.Failed())
+	for _, tt := range tests {
+		suite.Run(tt.name, func() {
+			precompileKeeper.EXPECT().GetPrecompileAddresses(suite.Ctx).
+				Return(nil). // No additional contracts added to access list
+				Once()
 
-	precompileKeeper.EXPECT().GetPrecompileAddresses(suite.Ctx).
-		Return([]common.Address{targetAddr}). // Add contract to access list
-		Once()
+			targetAddr := common.BytesToAddress([]byte("target"))
+			_, txResp1, err := suite.CallContract(
+				testutil.EIP2929TestContract,
+				contractAddr,
+				common.Big0,
+				tt.method,
+				targetAddr,
+			)
 
-	_, txResp2, err := suite.CallContract(
-		testutil.EIP2929TestContract,
-		contractAddr,
-		common.Big0,
-		"callAccount",
-		targetAddr,
-	)
+			suite.Require().NoError(err)
+			suite.Require().False(txResp1.Failed())
 
-	suite.Require().NoError(err)
-	suite.Require().False(txResp2.Failed())
+			precompileKeeper.EXPECT().GetPrecompileAddresses(suite.Ctx).
+				Return([]common.Address{targetAddr}). // Add contract to access list
+				Once()
 
-	// Check if gas is less than the previous call
-	suite.Require().Less(txResp2.GasUsed, txResp1.GasUsed)
+			_, txResp2, err := suite.CallContract(
+				testutil.EIP2929TestContract,
+				contractAddr,
+				common.Big0,
+				tt.method,
+				targetAddr,
+			)
 
-	// COLD_ACCOUNT_ACCESS_COST - WARM_STORAGE_READ_COST
-	// Refer to table: https://eips.ethereum.org/EIPS/eip-2929
-	eip2929AdditionalGas := uint64(2600 - 100)
-	suite.Require().Equal(txResp2.GasUsed+eip2929AdditionalGas, txResp1.GasUsed)
+			suite.Require().NoError(err)
+			suite.Require().False(txResp2.Failed())
+
+			// Check if gas is less than the previous call
+			suite.Require().Less(txResp2.GasUsed, txResp1.GasUsed)
+
+			// COLD_ACCOUNT_ACCESS_COST - WARM_STORAGE_READ_COST
+			// Refer to table: https://eips.ethereum.org/EIPS/eip-2929
+			eip2929AdditionalGas := uint64(2600 - 100)
+			suite.Require().Equal(
+				txResp2.GasUsed+eip2929AdditionalGas,
+				txResp1.GasUsed,
+				"gas used should be less with custom precompile addresses in access list",
+			)
+		})
+	}
 }
