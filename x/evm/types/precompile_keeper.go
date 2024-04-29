@@ -15,7 +15,7 @@ type DefaultPrecompileKeeper struct{}
 
 // GetPrecompileAddresses returns an empty list of precompile addresses.
 func (DefaultPrecompileKeeper) GetPrecompileAddresses(
-	ctx sdk.Context,
+	_ sdk.Context,
 ) []common.Address {
 	return nil
 }
