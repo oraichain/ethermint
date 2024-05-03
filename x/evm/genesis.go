@@ -48,6 +48,11 @@ func InitGenesis(
 		panic(err)
 	}
 
+	err = k.SyncEnabledPrecompiles(ctx, keeper.HexToAddresses(data.Params.GetEnabledPrecompiles()))
+	if err != nil {
+		panic(fmt.Errorf("can't sync enabled precompiles: %v", err))
+	}
+
 	err = k.SetParams(ctx, data.Params)
 	if err != nil {
 		panic(fmt.Errorf("error setting params %s", err))
