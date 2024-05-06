@@ -19,20 +19,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strconv"
-
-	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
-
-	tmbytes "github.com/cometbft/cometbft/libs/bytes"
-	tmtypes "github.com/cometbft/cometbft/types"
 
 	errorsmod "cosmossdk.io/errors"
 	"github.com/armon/go-metrics"
+	tmbytes "github.com/cometbft/cometbft/libs/bytes"
+	tmtypes "github.com/cometbft/cometbft/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/evmos/ethermint/x/evm/statedb"
 	"github.com/evmos/ethermint/x/evm/types"
 )
+
+const PrecompileNonce uint64 = 1
+
+var PrecompileCode = []byte{0x1}
 
 var _ types.MsgServer = &Keeper{}
 
@@ -153,6 +159,46 @@ func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams)
 	}
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	oldParams := k.GetParams(ctx)
+	oldEnabledPrecompiles := oldParams.GetEnabledPrecompiles()
+
+	newEnabledPrecompiles := req.Params.EnabledPrecompiles
+	newEnabledPrecompilesMap := make(map[common.Address]struct{}, len(newEnabledPrecompiles))
+
+	for _, hexAddr := range newEnabledPrecompiles {
+		addr := common.HexToAddress(hexAddr)
+		newEnabledPrecompilesMap[addr] = struct{}{}
+
+		// Set the nonce of the precompile's address (as is done when a contract is created) to ensure
+		// that it is marked as non-empty and will not be cleaned up when the statedb is finalized.
+		codeHash := crypto.Keccak256Hash(PrecompileCode)
+		err := k.SetAccount(ctx, addr, statedb.Account{
+			Nonce:    PrecompileNonce,
+			Balance:  big.NewInt(0),
+			CodeHash: codeHash[:],
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		// Set the code of the precompile's address to a non-zero length byte slice to ensure that the precompile
+		// can be called from within Solidity contracts. Solidity adds a check before invoking a contract to ensure
+		// that it does not attempt to invoke a non-existent contract.
+		k.SetCode(ctx, codeHash[:], PrecompileCode)
+	}
+
+	for _, hexAddr := range oldEnabledPrecompiles {
+		addr := common.HexToAddress(hexAddr)
+		if _, ok := newEnabledPrecompilesMap[addr]; ok {
+			continue
+		}
+
+		if err := k.DeleteAccount(ctx, addr); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := k.SetParams(ctx, req.Params); err != nil {
 		return nil, err
 	}
