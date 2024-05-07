@@ -161,15 +161,32 @@ func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams)
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	oldParams := k.GetParams(ctx)
-	oldEnabledPrecompiles := oldParams.GetEnabledPrecompiles()
+	oldEnabledPrecompiles := HexToAddresses(oldParams.GetEnabledPrecompiles())
+	newEnabledPrecompiles := HexToAddresses(req.Params.EnabledPrecompiles)
 
-	newEnabledPrecompiles := req.Params.EnabledPrecompiles
-	newEnabledPrecompilesMap := make(map[common.Address]struct{}, len(newEnabledPrecompiles))
+	err := k.InitializePrecompiles(ctx, newEnabledPrecompiles)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, hexAddr := range newEnabledPrecompiles {
-		addr := common.HexToAddress(hexAddr)
-		newEnabledPrecompilesMap[addr] = struct{}{}
+	disabledPrecompiles := SetDifference(oldEnabledPrecompiles, newEnabledPrecompiles)
+	err = k.UninitializePrecompiles(ctx, disabledPrecompiles)
+	if err != nil {
+		return nil, err
+	}
 
+	if err := k.SetParams(ctx, req.Params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgUpdateParamsResponse{}, nil
+}
+
+// InitializePrecompiles initializes list of precompiles at specified addresses.
+// Initialization of precompile sets non-zero nonce and non-empty code at specified address to resemble behavior of
+// regular smart contract.
+func (k *Keeper) InitializePrecompiles(ctx sdk.Context, addrs []common.Address) error {
+	for _, addr := range addrs {
 		// Set the nonce of the precompile's address (as is done when a contract is created) to ensure
 		// that it is marked as non-empty and will not be cleaned up when the statedb is finalized.
 		codeHash := crypto.Keccak256Hash(PrecompileCode)
@@ -179,7 +196,7 @@ func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams)
 			CodeHash: codeHash[:],
 		})
 		if err != nil {
-			return nil, err
+			return err
 		}
 
 		// Set the code of the precompile's address to a non-zero length byte slice to ensure that the precompile
@@ -188,20 +205,55 @@ func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams)
 		k.SetCode(ctx, codeHash[:], PrecompileCode)
 	}
 
-	for _, hexAddr := range oldEnabledPrecompiles {
-		addr := common.HexToAddress(hexAddr)
-		if _, ok := newEnabledPrecompilesMap[addr]; ok {
-			continue
-		}
+	return nil
+}
 
+// UninitializePrecompiles uninitializes list of precompiles at specified addresses.
+// Uninitialization of precompile sets zero nonce and empty code at specified address.
+func (k *Keeper) UninitializePrecompiles(ctx sdk.Context, addrs []common.Address) error {
+	for _, addr := range addrs {
 		if err := k.DeleteAccount(ctx, addr); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	if err := k.SetParams(ctx, req.Params); err != nil {
-		return nil, err
+	return nil
+}
+
+// SetDifference returns difference between two sets, example can be:
+// a   : {1, 2, 3}
+// b   : {1, 3}
+// diff: {2}
+func SetDifference(a []common.Address, b []common.Address) []common.Address {
+	bMap := make(map[common.Address]struct{}, len(b))
+	for _, elem := range b {
+		bMap[elem] = struct{}{}
 	}
 
-	return &types.MsgUpdateParamsResponse{}, nil
+	diff := make([]common.Address, 0)
+	for _, elem := range a {
+		if _, ok := bMap[elem]; !ok {
+			diff = append(diff, elem)
+		}
+	}
+
+	return diff
+}
+
+func HexToAddresses(hexAddrs []string) []common.Address {
+	addrs := make([]common.Address, len(hexAddrs))
+	for i, hexAddr := range hexAddrs {
+		addrs[i] = common.HexToAddress(hexAddr)
+	}
+
+	return addrs
+}
+
+func AddressesToHex(addrs []common.Address) []string {
+	hexAddrs := make([]string, len(addrs))
+	for i, addr := range addrs {
+		hexAddrs[i] = addr.Hex()
+	}
+
+	return hexAddrs
 }
