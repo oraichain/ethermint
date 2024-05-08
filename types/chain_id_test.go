@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"math/big"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 )
 
 func TestParseChainID(t *testing.T) {
+	fmt.Println(hashChainIdToInt("Oraichain"))
 	testCases := []struct {
 		name     string
 		chainID  string
@@ -17,6 +19,9 @@ func TestParseChainID(t *testing.T) {
 	}{
 		{
 			"valid chain-id, single digit", "ethermint_1-1", false, big.NewInt(1),
+		},
+		{
+			"valid chain-id, single digit", "Oraichain", false, hashChainIdToInt("Oraichain"),
 		},
 		{
 			"valid chain-id, multiple digits", "aragonchain_256-1", false, big.NewInt(256),
