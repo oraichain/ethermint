@@ -2,7 +2,7 @@ module github.com/tharsis/ethermint
 
 go 1.21
 
-toolchain go1.22.1
+toolchain go1.21.4
 
 require (
 	github.com/btcsuite/btcd v0.24.0
