@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -334,4 +335,49 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	}
 	k.SetTransientGasUsed(ctx, result)
 	return result, nil
+}
+
+// GetEvmAddressMapping returns the account for a given address.
+func (k Keeper) GetEvmAddressMapping(ctx sdk.Context, addr sdk.AccAddress) (*common.Address, error) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(types.EvmAddressMappingStoreKey(addr))
+	if bz == nil {
+		return nil, fmt.Errorf("There is no evm address mapped to %s.", addr.String())
+	}
+	evmAddress := common.BytesToAddress(bz)
+	return &evmAddress, nil
+}
+
+// GetCosmosAddressMapping returns the account for a given address.
+func (k Keeper) GetCosmosAddressMapping(ctx sdk.Context, evmAddress common.Address) (*sdk.AccAddress, error) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(types.CosmosAddressMappingStoreKey(evmAddress))
+	if bz == nil {
+		return nil, fmt.Errorf("There is no cosmos address mapped to %s.", evmAddress.String())
+	}
+	cosmosAddress := sdk.AccAddress(bz)
+	return &cosmosAddress, nil
+}
+
+// SetAddressMapping sets the a mapping of an evm address for a given cosmos address.
+func (k Keeper) SetAddressMapping(ctx sdk.Context, cosmosAddress sdk.AccAddress, evmAddress common.Address) {
+	store := ctx.KVStore(k.storeKey)
+	evmMappingKey := types.EvmAddressMappingStoreKey(cosmosAddress)
+	cosmosMappingKey := types.CosmosAddressMappingStoreKey(evmAddress)
+	store.Set(evmMappingKey, evmAddress.Bytes())
+	store.Set(cosmosMappingKey, cosmosAddress.Bytes())
+}
+
+// DeleteAddressMapping sets the a mapping of an evm address for a given cosmos address.
+func (k Keeper) DeleteAddressMapping(ctx sdk.Context, cosmosAddress sdk.AccAddress) error {
+	store := ctx.KVStore(k.storeKey)
+	evmAddress, err := k.GetEvmAddressMapping(ctx, cosmosAddress)
+	if err != nil {
+		return err
+	}
+	evmMappingKey := types.EvmAddressMappingStoreKey(cosmosAddress)
+	cosmosMappingKey := types.CosmosAddressMappingStoreKey(*evmAddress)
+	store.Delete(evmMappingKey)
+	store.Delete(cosmosMappingKey)
+	return nil
 }

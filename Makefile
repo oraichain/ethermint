@@ -424,6 +424,12 @@ proto-gen:
 	@if docker ps -a --format '{{.Names}}' | grep -Eq "^${containerProtoGen}$$"; then docker start -a $(containerProtoGen); else docker run --name $(containerProtoGen) -v $(CURDIR):/workspace --workdir /workspace $(containerProtoImage) \
 		sh ./scripts/protocgen.sh; fi
 
+proto-gen-new:
+	@echo "Generating go proto files"
+	@buf generate --template proto/buf.gen.gogo.yaml proto
+	@cp -r out/github.com/tharsis/ethermint/* ./
+	@rm -rf out/github.com
+
 proto-swagger-gen:
 	@echo "Generating Protobuf Swagger"
 	@./scripts/proto-tools-installer.sh
