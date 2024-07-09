@@ -735,7 +735,7 @@ func TestMsgSetMappingEvmAddress(t *testing.T) {
 			"abcd",
 			errArgs{
 				expectPass: false,
-				contains:   "The pubkey is invalid",
+				contains:   "length of pubkey is incorrect",
 			},
 		},
 		{

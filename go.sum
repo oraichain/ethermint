@@ -686,8 +686,6 @@ github.com/kataras/pio v0.0.2/go.mod h1:hAoW0t9UmXi4R5Oyq5Z4irTbaTsOemSrDGUtaTl7
 github.com/kataras/sitemap v0.0.5/go.mod h1:KY2eugMKiPwsJgx7+U103YZehfvNGOXURubcGyk0Bz8=
 github.com/kava-labs/cometbft v0.34.31-kava.2 h1:jLwdCwCWTrxbvAOvWJ4a01PmnCgT6rgiyk5VO4D0Ku0=
 github.com/kava-labs/cometbft v0.34.31-kava.2/go.mod h1:9g9utLtQwhADtb5IgbYbH+FzS1jjpR3P4pjg9q6ehy4=
-github.com/kava-labs/cosmos-sdk v0.45.16-iavl-v1-kava.3 h1:Um5GfJjQF2wH52ScUghX56s+HThtV//ncu3joPLxtOM=
-github.com/kava-labs/cosmos-sdk v0.45.16-iavl-v1-kava.3/go.mod h1:IQW2QSRJCZTNBBGYHEr+fHMD+QxVvi4hWT8QfxCuIMk=
 github.com/keybase/go-keychain v0.0.0-20190712205309-48d3d31d256d h1:Z+RDyXzjKE0i2sTjZ/b1uxiGtPhFy34Ou/Tk0qwN0kM=
 github.com/keybase/go-keychain v0.0.0-20190712205309-48d3d31d256d/go.mod h1:JJNrCn9otv/2QP4D7SMJBgaleKpOf66PnW6F5WGNRIc=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
@@ -865,6 +863,8 @@ github.com/openzipkin-contrib/zipkin-go-opentracing v0.4.5/go.mod h1:/wsWhb9smxS
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=
 github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
+github.com/oraichain/cosmos-sdk-kava v0.45.17-0.20240709184359-75c70fd95c18 h1:gBdGuIQzf+pgs0KnYXjv/Z19iW5+j2qSd1YbAOtXJQw=
+github.com/oraichain/cosmos-sdk-kava v0.45.17-0.20240709184359-75c70fd95c18/go.mod h1:wv6KavyzQpqK07HBPi5AFKpjiq53w2vLVsxfRBFRoTM=
 github.com/ory/dockertest v3.3.5+incompatible h1:iLLK6SQwIhcbrG783Dghaaa3WPzGc+4Emza6EbVUUGA=
 github.com/ory/dockertest v3.3.5+incompatible/go.mod h1:1vX4m9wsvi00u5bseYwXaSnhNrne+V0E6LAcBILJdPs=
 github.com/otiai10/copy v1.6.0 h1:IinKAryFFuPONZ7cm6T6E2QX/vcJwSnlaA5lfoaXIiQ=

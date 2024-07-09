@@ -6,6 +6,7 @@ toolchain go1.21.4
 
 require (
 	github.com/btcsuite/btcd v0.24.0
+	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.5
 	github.com/cosmos/cosmos-sdk v0.45.16
 	github.com/cosmos/go-bip39 v1.0.0
@@ -55,7 +56,6 @@ require (
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bgentry/speakeasy v0.1.1-0.20220910012023-760eaf8b6816 // indirect
-	github.com/btcsuite/btcd/btcec/v2 v2.3.2 // indirect
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.1.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
@@ -180,7 +180,7 @@ require (
 
 replace (
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.1.7-0.20210622111912-ef00f8ac3d76
-	github.com/cosmos/cosmos-sdk => github.com/kava-labs/cosmos-sdk v0.45.16-iavl-v1-kava.3
+	github.com/cosmos/cosmos-sdk => github.com/oraichain/cosmos-sdk-kava v0.45.17-0.20240709184359-75c70fd95c18
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	github.com/tendermint/tendermint => github.com/kava-labs/cometbft v0.34.31-kava.2
 	google.golang.org/grpc => google.golang.org/grpc v1.33.2
