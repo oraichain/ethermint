@@ -1,6 +1,7 @@
 package ante_test
 
 import (
+	"encoding/base64"
 	"math/big"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -9,6 +10,7 @@ import (
 	"github.com/tharsis/ethermint/server/config"
 	"github.com/tharsis/ethermint/tests"
 	"github.com/tharsis/ethermint/x/evm/statedb"
+	"github.com/tharsis/ethermint/x/evm/types"
 	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -147,9 +149,15 @@ func (suite AnteTestSuite) TestNewEthAccountVerificationDecorator() {
 
 func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
 	suite.SetupTest()
-	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper)
+	goCtx := sdk.WrapSDKContext(suite.ctx)
 
-	addr := tests.GenerateAddress()
+	addr, privKey := tests.NewAddrKey()
+	pubKey := base64.StdEncoding.EncodeToString(privKey.PubKey().Bytes())
+	cosmosAddress, _ := types.PubkeyToCosmosAddress(pubKey)
+	msg := types.NewMsgSetMappingEvmAddress(cosmosAddress.String(), pubKey)
+	suite.app.EvmKeeper.SetMappingEvmAddress(goCtx, &msg)
+
+	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper, suite.app.EvmKeeper)
 
 	tx := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 1, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
 	tx.From = addr.Hex()
@@ -178,7 +186,7 @@ func (suite AnteTestSuite) TestEthNonceVerificationDecorator() {
 			"success",
 			tx,
 			func() {
-				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
+				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, cosmosAddress)
 				suite.Require().NoError(acc.SetSequence(1))
 				suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 			},
@@ -334,7 +342,6 @@ func (suite AnteTestSuite) TestCanTransferDecorator() {
 	)
 
 	tx.From = addr.Hex()
-
 	err := tx.Sign(suite.ethSigner, tests.NewSigner(privKey))
 	suite.Require().NoError(err)
 
@@ -388,8 +395,14 @@ func (suite AnteTestSuite) TestCanTransferDecorator() {
 }
 
 func (suite AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
-	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper)
 	addr, privKey := tests.NewAddrKey()
+	goCtx := sdk.WrapSDKContext(suite.ctx)
+
+	pubKey := base64.StdEncoding.EncodeToString(privKey.PubKey().Bytes())
+	cosmosAddress, _ := types.PubkeyToCosmosAddress(pubKey)
+	msg := types.NewMsgSetMappingEvmAddress(cosmosAddress.String(), pubKey)
+	suite.app.EvmKeeper.SetMappingEvmAddress(goCtx, &msg)
+	dec := ante.NewEthIncrementSenderSequenceDecorator(suite.app.AccountKeeper, suite.app.EvmKeeper)
 
 	contract := evmtypes.NewTxContract(suite.app.EvmKeeper.ChainID(), 0, big.NewInt(10), 1000, big.NewInt(1), nil, nil, nil, nil)
 	contract.From = addr.Hex()
@@ -436,7 +449,7 @@ func (suite AnteTestSuite) TestEthIncrementSenderSequenceDecorator() {
 			"success - create contract",
 			contract,
 			func() {
-				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
+				acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, cosmosAddress)
 				suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 			},
 			true, false,

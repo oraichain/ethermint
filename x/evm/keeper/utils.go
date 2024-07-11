@@ -9,6 +9,7 @@ import (
 
 	evmtypes "github.com/tharsis/ethermint/x/evm/types"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 )
@@ -24,9 +25,11 @@ func (k Keeper) DeductTxCostsFromUserBalance(
 	isContractCreation := txData.GetTo() == nil
 
 	// fetch sender account from signature
-	signerAcc, err := authante.GetSignerAcc(ctx, k.accountKeeper, msgEthTx.GetFrom())
+	evmAddress := common.BytesToAddress(msgEthTx.GetFrom())
+	signer := k.GetCosmosAddressMapping(ctx, evmAddress)
+	signerAcc, err := authante.GetSignerAcc(ctx, k.accountKeeper, signer)
 	if err != nil {
-		return nil, sdkerrors.Wrapf(err, "account not found for sender %s", msgEthTx.From)
+		return nil, sdkerrors.Wrapf(err, "account not found for cosmos signer %s and evm address %s", signer, evmAddress)
 	}
 
 	gasLimit := txData.GetGas()

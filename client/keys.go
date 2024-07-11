@@ -71,6 +71,7 @@ The pass backend requires GnuPG: https://gnupg.org/
 		keys.MigrateCommand(),
 		flags.LineBreak,
 		UnsafeExportEthKeyCommand(),
+		UnsafeExportCosmosKeyCommand(),
 		UnsafeImportKeyCommand(),
 	)
 

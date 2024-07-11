@@ -50,14 +50,17 @@ func (suite *KeeperTestSuite) TestQueryAccount() {
 		{
 			"success",
 			func() {
-				amt := sdk.Coins{ethermint.NewPhotonCoinInt64(100)}
-				err := suite.app.BankKeeper.MintCoins(suite.ctx, types.ModuleName, amt)
+				coin := ethermint.NewPhotonCoinInt64(100)
+				mintedCoin := ethermint.NewPhotonCoinInt64(10000000000000000)
+				amt := sdk.Coins{coin}
+				err := suite.app.BankKeeper.MintCoins(suite.ctx, types.ModuleName, sdk.Coins{mintedCoin})
+				cosmosAddress := suite.app.EvmKeeper.GetCosmosAddressMapping(suite.ctx, suite.address)
 				suite.Require().NoError(err)
-				err = suite.app.BankKeeper.SendCoinsFromModuleToAccount(suite.ctx, types.ModuleName, suite.address.Bytes(), amt)
+				err = suite.app.BankKeeper.SendCoinsFromModuleToAccount(suite.ctx, types.ModuleName, cosmosAddress, amt)
 				suite.Require().NoError(err)
 
 				expAccount = &types.QueryAccountResponse{
-					Balance:  "100",
+					Balance:  coin.Amount.String(),
 					CodeHash: common.BytesToHash(crypto.Keccak256(nil)).Hex(),
 					Nonce:    0,
 				}
@@ -129,7 +132,8 @@ func (suite *KeeperTestSuite) TestQueryCosmosAccount() {
 		{
 			"success with seq and account number",
 			func() {
-				acc := suite.app.AccountKeeper.GetAccount(suite.ctx, suite.address.Bytes())
+				cosmosAddress := suite.app.EvmKeeper.GetCosmosAddressMapping(suite.ctx, suite.address)
+				acc := suite.app.AccountKeeper.GetAccount(suite.ctx, cosmosAddress)
 				suite.Require().NoError(acc.SetSequence(10))
 				suite.Require().NoError(acc.SetAccountNumber(1))
 				suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
@@ -193,8 +197,9 @@ func (suite *KeeperTestSuite) TestQueryBalance() {
 			func() {
 				amt := sdk.Coins{ethermint.NewPhotonCoinInt64(100)}
 				err := suite.app.BankKeeper.MintCoins(suite.ctx, types.ModuleName, amt)
+				cosmosAddress := suite.app.EvmKeeper.GetCosmosAddressMapping(suite.ctx, suite.address)
 				suite.Require().NoError(err)
-				err = suite.app.BankKeeper.SendCoinsFromModuleToAccount(suite.ctx, types.ModuleName, suite.address.Bytes(), amt)
+				err = suite.app.BankKeeper.SendCoinsFromModuleToAccount(suite.ctx, types.ModuleName, cosmosAddress, amt)
 				suite.Require().NoError(err)
 
 				expBalance = "100"

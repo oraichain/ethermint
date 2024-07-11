@@ -875,10 +875,18 @@ func (e *EVMBackend) EstimateGas(args evmtypes.TransactionArgs, blockNrOptional 
 // GetTransactionCount returns the number of transactions at the given address up to the given block number.
 func (e *EVMBackend) GetTransactionCount(address common.Address, blockNum types.BlockNumber) (*hexutil.Uint64, error) {
 	// Get nonce (sequence) from account
-	from := sdk.AccAddress(address.Bytes())
+	cosmosRequest := evmtypes.QueryMappedCosmosAddressRequest{EvmAddress: address.Hex()}
+	res, err := e.queryClient.MappedCosmosAddress(e.ctx, &cosmosRequest)
+	if err != nil {
+		return nil, err
+	}
 	accRet := e.clientCtx.AccountRetriever
 
-	err := accRet.EnsureExists(e.clientCtx, from)
+	cosmosAddress, err := sdk.AccAddressFromBech32(res.CosmosAddress)
+	if err != nil {
+		return nil, err
+	}
+	err = accRet.EnsureExists(e.clientCtx, cosmosAddress)
 	if err != nil {
 		// account doesn't exist yet, return 0
 		n := hexutil.Uint64(0)

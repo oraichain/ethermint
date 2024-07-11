@@ -21,7 +21,7 @@ func RegisterInterfaces(registry codectypes.InterfaceRegistry) {
 		(*sdk.Msg)(nil),
 		&MsgEthereumTx{},
 		&MsgSetMappingEvmAddress{},
-		&MsgDeleteMappingEvmAddress{},
+		// &MsgDeleteMappingEvmAddress{},
 	)
 	registry.RegisterInterface(
 		"ethermint.evm.v1.ExtensionOptionsEthereumTx",

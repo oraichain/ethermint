@@ -18,6 +18,7 @@ type EVMKeeper interface {
 	statedb.Keeper
 
 	ChainID() *big.Int
+	GetCosmosAddressMapping(ctx sdk.Context, evmAddress common.Address) sdk.AccAddress
 	GetParams(ctx sdk.Context) evmtypes.Params
 	NewEVM(ctx sdk.Context, msg core.Message, cfg *evmtypes.EVMConfig, tracer vm.EVMLogger, stateDB vm.StateDB) *vm.EVM
 	DeductTxCostsFromUserBalance(
