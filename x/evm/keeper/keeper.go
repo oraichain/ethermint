@@ -371,6 +371,15 @@ func (k Keeper) SetAddressMapping(ctx sdk.Context, cosmosAddress sdk.AccAddress,
 	store.Set(cosmosMappingKey, cosmosAddress.Bytes())
 }
 
+// for testing only!
+func (k Keeper) DeleteAddressMapping(ctx sdk.Context, cosmosAddress sdk.AccAddress, evmAddress common.Address) {
+	store := ctx.KVStore(k.storeKey)
+	evmMappingKey := types.EvmAddressMappingStoreKey(cosmosAddress)
+	cosmosMappingKey := types.CosmosAddressMappingStoreKey(evmAddress)
+	store.Delete(evmMappingKey)
+	store.Delete(cosmosMappingKey)
+}
+
 func (k Keeper) GetCosmosAddressMapping(ctx sdk.Context, evmAddress common.Address) sdk.AccAddress {
 	cosmosAddress := sdk.AccAddress(evmAddress.Bytes())
 	cosmosAddr, err := k.getCosmosAddressMapping(ctx, evmAddress)
