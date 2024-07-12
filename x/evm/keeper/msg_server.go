@@ -98,6 +98,12 @@ func (k *Keeper) SetMappingEvmAddress(
 		return nil, sdkerrors.Wrap(sdkerrors.ErrorInvalidSigner, fmt.Sprintf("invalid signer address: %s", err.Error()))
 	}
 
+	_, err = k.GetEvmAddressMapping(ctx, signer)
+	if err == nil {
+		// no-op since there's already a mapping
+		return &types.MsgSetMappingEvmAddressResponse{}, nil
+	}
+
 	// already checked at validateBasic, but double check here to make sure
 	cosmosAddress, err := types.PubkeyToCosmosAddress(msg.Pubkey)
 	if err != nil {
