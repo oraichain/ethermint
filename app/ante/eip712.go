@@ -100,7 +100,7 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 	// EIP712 has just one signature, avoid looping here and only read index 0
 	i := 0
 	sig := sigs[i]
-	err = svd.evmKeeper.ValidateSignerEIP712Ante(ctx, sig.PubKey, signerAddrs[i])
+	err = svd.evmKeeper.ValidateSignerAnte(ctx, sig.PubKey, signerAddrs[i])
 	if err != nil {
 		return ctx, err
 	}
@@ -188,7 +188,7 @@ func (spkd SetPubKeyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate b
 			pk = simSecp256k1Pubkey
 		}
 
-		err := spkd.evmKeeper.ValidateSignerEIP712Ante(ctx, pk, signers[i])
+		err := spkd.evmKeeper.ValidateSignerAnte(ctx, pk, signers[i])
 		if !simulate && err != nil {
 			return ctx, err
 		}

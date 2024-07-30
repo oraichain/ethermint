@@ -424,7 +424,7 @@ func (k Keeper) MigrateBalance(ctx sdk.Context, evmAddress common.Address, mappe
 	return nil
 }
 
-func (k Keeper) ValidateSignerEIP712Ante(ctx sdk.Context, pk cryptotypes.PubKey, signer sdk.AccAddress) error {
+func (k Keeper) ValidateSignerAnte(ctx sdk.Context, pk cryptotypes.PubKey, signer sdk.AccAddress) error {
 	accAddressFromPubkey, err := k.GetAccAddressBytesFromPubkey(ctx, pk)
 	if err != nil {
 		return err
@@ -442,10 +442,7 @@ func (k Keeper) ValidateSignerEIP712Ante(ctx sdk.Context, pk cryptotypes.PubKey,
 
 func (k Keeper) GetAccAddressBytesFromPubkey(ctx sdk.Context, pk cryptotypes.PubKey) ([]byte, error) {
 	var addressFromPubkey []byte
-	if pk.Type() == "secp256k1" {
-		addressFromPubkey = pk.Address().Bytes()
-		return addressFromPubkey, nil
-	} else if pk.Type() == ethsecp256k1.KeyType {
+	if pk.Type() == ethsecp256k1.KeyType {
 		evmAddressFromPubkey, err := types.PubkeyBytesToEVMAddress(pk.Bytes())
 		if err != nil {
 			return nil, sdkerrors.Wrapf(sdkerrors.ErrInvalidPubKey,
@@ -454,8 +451,7 @@ func (k Keeper) GetAccAddressBytesFromPubkey(ctx sdk.Context, pk cryptotypes.Pub
 		signerFromPubkey := k.GetCosmosAddressMapping(ctx, *evmAddressFromPubkey)
 		addressFromPubkey = signerFromPubkey.Bytes()
 		return addressFromPubkey, nil
-	} else {
-		return nil, sdkerrors.Wrapf(sdkerrors.ErrInvalidPubKey,
-			"Invalid pubkey type: %s", pk.Type())
 	}
+	addressFromPubkey = pk.Address().Bytes()
+	return addressFromPubkey, nil
 }
