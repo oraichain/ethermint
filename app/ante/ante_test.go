@@ -1,6 +1,7 @@
 package ante_test
 
 import (
+	"encoding/base64"
 	"math/big"
 	"strings"
 
@@ -17,10 +18,16 @@ func (suite AnteTestSuite) TestAnteHandler() {
 	suite.enableFeemarket = false
 	suite.SetupTest() // reset
 
+	goCtx := sdk.WrapSDKContext(suite.ctx)
+
 	addr, privKey := tests.NewAddrKey()
+	pubKey := base64.StdEncoding.EncodeToString(privKey.PubKey().Bytes())
+	cosmosAddress, _ := evmtypes.PubkeyBytesToCosmosAddress(privKey.PubKey().Bytes())
+	msg := evmtypes.NewMsgSetMappingEvmAddress(cosmosAddress.String(), pubKey)
+	suite.app.EvmKeeper.SetMappingEvmAddress(goCtx, &msg)
 	to := tests.GenerateAddress()
 
-	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, addr.Bytes())
+	acc := suite.app.AccountKeeper.NewAccountWithAddress(suite.ctx, cosmosAddress)
 	suite.Require().NoError(acc.SetSequence(1))
 	suite.app.AccountKeeper.SetAccount(suite.ctx, acc)
 

@@ -15,6 +15,9 @@ service Msg {
   rpc EthereumTx(MsgEthereumTx) returns (MsgEthereumTxResponse) {
     option (google.api.http).post = "/ethermint/evm/v1/ethereum_tx";
   };
+
+  // SetMappingEvmAddress defines a method for mapping an evm address to a cosmos address
+  rpc SetMappingEvmAddress(MsgSetMappingEvmAddress) returns (MsgSetMappingEvmAddressResponse);
 }
 
 // MsgEthereumTx encapsulates an Ethereum transaction as an SDK message.
@@ -170,3 +173,14 @@ message MsgEthereumTxResponse {
   // gas consumed by the transaction
   uint64 gas_used = 5;
 }
+
+// MsgSetMappingEvmAddress defines a mapping from cosmos address to evm address.
+message MsgSetMappingEvmAddress {
+  // signer cosmos address
+  string signer = 1;
+  // public key that we will use to map cosmos to evm.
+  string pubkey = 2;
+}
+
+// MsgSetMappingEvmAddressResponse defines the response value from Msg/SetMappingEvmAddress.
+message MsgSetMappingEvmAddressResponse {}

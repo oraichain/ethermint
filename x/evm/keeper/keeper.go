@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"bytes"
+	"fmt"
 	"math/big"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -15,6 +17,8 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/tendermint/tendermint/libs/log"
 
+	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
+	"github.com/tharsis/ethermint/crypto/ethsecp256k1"
 	ethermint "github.com/tharsis/ethermint/types"
 	"github.com/tharsis/ethermint/x/evm/statedb"
 	"github.com/tharsis/ethermint/x/evm/types"
@@ -236,7 +240,7 @@ func (k Keeper) Tracer(ctx sdk.Context, msg core.Message, ethCfg *params.ChainCo
 // GetAccountWithoutBalance load nonce and codehash without balance,
 // more efficient in cases where balance is not needed.
 func (k *Keeper) GetAccountWithoutBalance(ctx sdk.Context, addr common.Address) *statedb.Account {
-	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	cosmosAddr := k.GetCosmosAddressMapping(ctx, addr)
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
 		return nil
@@ -270,7 +274,7 @@ func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) statedb
 
 // GetNonce returns the sequence number of an account, returns 0 if not exists.
 func (k *Keeper) GetNonce(ctx sdk.Context, addr common.Address) uint64 {
-	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	cosmosAddr := k.GetCosmosAddressMapping(ctx, addr)
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
 		return 0
@@ -281,7 +285,7 @@ func (k *Keeper) GetNonce(ctx sdk.Context, addr common.Address) uint64 {
 
 // GetBalance load account's balance of gas token
 func (k *Keeper) GetBalance(ctx sdk.Context, addr common.Address) *big.Int {
-	cosmosAddr := sdk.AccAddress(addr.Bytes())
+	cosmosAddr := k.GetCosmosAddressMapping(ctx, addr)
 	params := k.GetParams(ctx)
 	coin := k.bankKeeper.GetBalance(ctx, cosmosAddr, params.EvmDenom)
 	return coin.Amount.BigInt()
@@ -334,4 +338,120 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	}
 	k.SetTransientGasUsed(ctx, result)
 	return result, nil
+}
+
+// GetEvmAddressMapping returns the account for a given address.
+func (k Keeper) GetEvmAddressMapping(ctx sdk.Context, addr sdk.AccAddress) (*common.Address, error) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(types.EvmAddressMappingStoreKey(addr))
+	if bz == nil {
+		return nil, sdkerrors.Wrap(sdkerrors.ErrNotFound, fmt.Sprintf("There is no evm address mapped to %s.", addr.String()))
+	}
+	evmAddress := common.BytesToAddress(bz)
+	return &evmAddress, nil
+}
+
+// getCosmosAddressMapping returns the account for a given address.
+func (k Keeper) getCosmosAddressMapping(ctx sdk.Context, evmAddress common.Address) (*sdk.AccAddress, error) {
+	store := ctx.KVStore(k.storeKey)
+	bz := store.Get(types.CosmosAddressMappingStoreKey(evmAddress))
+	if bz == nil {
+		return nil, sdkerrors.Wrap(sdkerrors.ErrNotFound, fmt.Sprintf("There is no cosmos address mapped to %s.", evmAddress.String()))
+	}
+	cosmosAddress := sdk.AccAddress(bz)
+	return &cosmosAddress, nil
+}
+
+// SetAddressMapping sets the a mapping of an evm address for a given cosmos address.
+func (k Keeper) SetAddressMapping(ctx sdk.Context, cosmosAddress sdk.AccAddress, evmAddress common.Address) {
+	store := ctx.KVStore(k.storeKey)
+	evmMappingKey := types.EvmAddressMappingStoreKey(cosmosAddress)
+	cosmosMappingKey := types.CosmosAddressMappingStoreKey(evmAddress)
+	store.Set(evmMappingKey, evmAddress.Bytes())
+	store.Set(cosmosMappingKey, cosmosAddress.Bytes())
+}
+
+// for testing only!
+func (k Keeper) DeleteAddressMapping(ctx sdk.Context, cosmosAddress sdk.AccAddress, evmAddress common.Address) {
+	store := ctx.KVStore(k.storeKey)
+	evmMappingKey := types.EvmAddressMappingStoreKey(cosmosAddress)
+	cosmosMappingKey := types.CosmosAddressMappingStoreKey(evmAddress)
+	store.Delete(evmMappingKey)
+	store.Delete(cosmosMappingKey)
+}
+
+func (k Keeper) GetCosmosAddressMapping(ctx sdk.Context, evmAddress common.Address) sdk.AccAddress {
+	cosmosAddress := sdk.AccAddress(evmAddress.Bytes())
+	cosmosAddr, err := k.getCosmosAddressMapping(ctx, evmAddress)
+	if err == nil {
+		cosmosAddress = *cosmosAddr
+	}
+	return cosmosAddress
+}
+
+// migrate balance from address before mapping to after mapping
+func (k Keeper) MigrateNonce(ctx sdk.Context, evmAddress common.Address, mappedCosmosAddress sdk.AccAddress) error {
+	castAddress := sdk.AccAddress(evmAddress[:])
+	castAcc := k.accountKeeper.GetAccount(ctx, castAddress)
+	if castAcc == nil {
+		return nil
+	}
+	castNonce := castAcc.GetSequence()
+	mappedAcc := k.accountKeeper.GetAccount(ctx, mappedCosmosAddress)
+	if mappedAcc == nil {
+		return nil
+	}
+	mappedNonce := mappedAcc.GetSequence()
+
+	if castNonce > mappedNonce {
+		err := mappedAcc.SetSequence(castNonce)
+		if err != nil {
+			return err
+		}
+		k.accountKeeper.SetAccount(ctx, mappedAcc)
+	}
+	return nil
+}
+
+func (k Keeper) MigrateBalance(ctx sdk.Context, evmAddress common.Address, mappedCosmosAddress sdk.AccAddress) error {
+	castAddress := sdk.AccAddress(evmAddress[:])
+	castAddrBalances := k.bankKeeper.SpendableCoins(ctx, castAddress)
+	if !castAddrBalances.IsZero() {
+		if err := k.bankKeeper.SendCoins(ctx, castAddress, mappedCosmosAddress, castAddrBalances); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (k Keeper) ValidateSignerAnte(ctx sdk.Context, pk cryptotypes.PubKey, signer sdk.AccAddress) error {
+	accAddressFromPubkey, err := k.GetAccAddressBytesFromPubkey(ctx, pk)
+	if err != nil {
+		return err
+	}
+	// we convert signer AccAddress to evm address because in eip712, the signer is bytes() of evm address
+	evmAddressFromSigner := common.BytesToAddress(signer)
+	signerFromEvmAddressSigner := k.GetCosmosAddressMapping(ctx, evmAddressFromSigner)
+
+	if !bytes.Equal(accAddressFromPubkey, signerFromEvmAddressSigner.Bytes()) {
+		return sdkerrors.Wrapf(sdkerrors.ErrorInvalidSigner,
+			"Signer from pubkey %s does not match signer from GetSigners %s", sdk.AccAddress(accAddressFromPubkey).String(), signerFromEvmAddressSigner.String())
+	}
+	return nil
+}
+
+func (k Keeper) GetAccAddressBytesFromPubkey(ctx sdk.Context, pk cryptotypes.PubKey) ([]byte, error) {
+	var addressFromPubkey []byte
+	if pk.Type() == ethsecp256k1.KeyType {
+		evmAddressFromPubkey, err := types.PubkeyBytesToEVMAddress(pk.Bytes())
+		if err != nil {
+			return nil, sdkerrors.Wrapf(sdkerrors.ErrInvalidPubKey,
+				"Pubkey is invalid to convert to evm address: %s", pk.String())
+		}
+		signerFromPubkey := k.GetCosmosAddressMapping(ctx, *evmAddressFromPubkey)
+		addressFromPubkey = signerFromPubkey.Bytes()
+		return addressFromPubkey, nil
+	}
+	addressFromPubkey = pk.Address().Bytes()
+	return addressFromPubkey, nil
 }

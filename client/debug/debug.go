@@ -1,13 +1,14 @@
 package debug
 
 import (
-	"encoding/hex"
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tendermint/tendermint/libs/bytes"
+	"github.com/tharsis/ethermint/x/evm/types"
 
 	"github.com/ethereum/go-ethereum/common"
 
@@ -26,6 +27,7 @@ func Cmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(PubkeyCmd())
+	cmd.AddCommand(EvmAddressSimpleCmd())
 	cmd.AddCommand(AddrCmd())
 	cmd.AddCommand(RawBytesCmd())
 
@@ -53,13 +55,41 @@ func PubkeyCmd() *cobra.Command {
 			clientCtx := client.GetClientContextFromCmd(cmd)
 			pk, err := getPubKeyFromString(clientCtx, args[0])
 			if err != nil {
+				return nil
+			}
+			evmAddress, err := types.PubkeyBytesToEVMAddress(pk.Bytes())
+			if err != nil {
+				return err
+			}
+			cosmosAddress, err := types.PubkeyBytesToCosmosAddress(pk.Bytes())
+			if err != nil {
 				return err
 			}
 
-			addr := pk.Address()
-			cmd.Printf("Address (EIP-55): %s\n", common.BytesToAddress(addr))
-			cmd.Printf("Bech32 Acc: %s\n", sdk.AccAddress(addr))
-			cmd.Println("PubKey Hex:", hex.EncodeToString(pk.Bytes()))
+			cmd.Printf("Address (EIP-55): %s\n", evmAddress.Hex())
+			cmd.Printf("Bech32 Acc: %s\n", cosmosAddress.String())
+			cmd.Println("PubKey base64:", base64.StdEncoding.EncodeToString(pk.Bytes()))
+			return nil
+		},
+	}
+}
+
+func EvmAddressSimpleCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "pubkey-simple [pubkey]",
+		Short: "Decode a pubkey from pubkey",
+		Long:  "Decode a pubkey from pubkey and display it's address",
+		Example: fmt.Sprintf(
+			`"$ %s debug pubkey Ah4NweWyFaVG5xcOwY5I7Tm4mmfPgLtS+Qn3jvXLX0VP`,
+			version.AppName,
+		),
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			evmAddress, err := types.PubkeyToEVMAddress(args[0])
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s", evmAddress)
 			return nil
 		},
 	}

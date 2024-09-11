@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/cosmos/cosmos-sdk/client"
@@ -32,6 +33,7 @@ type MsgsTestSuite struct {
 	signer        keyring.Signer
 	from          common.Address
 	to            common.Address
+	cosmosAddress sdk.AccAddress
 	chainID       *big.Int
 	hundredBigInt *big.Int
 
@@ -43,9 +45,12 @@ func TestMsgsTestSuite(t *testing.T) {
 }
 
 func (suite *MsgsTestSuite) SetupTest() {
+	config := sdk.GetConfig()
+	config.SetBech32PrefixForAccount("orai", "oraipub")
 	from, privFrom := tests.NewAddrKey()
 
 	suite.signer = tests.NewSigner(privFrom)
+	suite.cosmosAddress = sdk.AccAddress(from.Bytes())
 	suite.from = from
 	suite.to = tests.GenerateAddress()
 	suite.chainID = big.NewInt(1)
@@ -393,13 +398,6 @@ func (suite *MsgsTestSuite) TestMsgEthereumTx_Sign() {
 			func(tx *types.MsgEthereumTx) { tx.From = "" },
 			false,
 		},
-		{
-			"from address ≠ signer address",
-			types.NewTx(suite.chainID, 0, &suite.to, nil, 100000, nil, nil, nil, []byte("test"), &ethtypes.AccessList{}),
-			ethtypes.NewEIP2930Signer(suite.chainID),
-			func(tx *types.MsgEthereumTx) { tx.From = suite.to.Hex() },
-			false,
-		},
 	}
 
 	for i, tc := range testCases {
@@ -691,4 +689,75 @@ func assertEqual(orig *ethtypes.Transaction, cpy *ethtypes.Transaction) error {
 		}
 	}
 	return nil
+}
+
+func TestMsgSetMappingEvmAddress(t *testing.T) {
+
+	signer := "orai1knzg7jdc49ghnc2pkqg6vks8ccsk6efzfgv6gv"
+	pubkey := "AvSl0d9JrHCW4mdEyHvZu076WxLgH0bBVLigUcFm4UjV"
+
+	type errArgs struct {
+		expectPass bool
+		contains   string
+	}
+
+	tests := []struct {
+		name          string
+		cosmosAddress string
+		pubkey        string
+		errArgs       errArgs
+	}{
+		{
+			"valid",
+			signer,
+			pubkey,
+			errArgs{
+				expectPass: true,
+			},
+		},
+		{
+			"invalid - invalid signer",
+			"foobar",
+			signer,
+			errArgs{
+				expectPass: false,
+				contains:   "signer is not a valid bech32 address",
+			},
+		},
+		{
+			"invalid - pubkey",
+			signer,
+			"abcd",
+			errArgs{
+				expectPass: false,
+				contains:   "length of pubkey is incorrect",
+			},
+		},
+		{
+			"invalid - signer does not match pubkey",
+			signer,
+			"A1lKKKy7Y9mHYvs8EtizLvKaFvu0jSbLqHmAvqGv7FXm",
+			errArgs{
+				expectPass: false,
+				contains:   "Signer does not match the given pubkey",
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			msg := types.MsgSetMappingEvmAddress{
+				Signer: tc.cosmosAddress,
+				Pubkey: tc.pubkey,
+			}
+			err := msg.ValidateBasic()
+
+			if tc.errArgs.expectPass {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.errArgs.contains)
+			}
+		})
+	}
 }

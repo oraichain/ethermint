@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 
-	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
@@ -152,7 +151,12 @@ func (e *EVMBackend) SetTxDefaults(args evmtypes.TransactionArgs) (evmtypes.Tran
 // Todo: include the ability to specify a blockNumber
 func (e *EVMBackend) getAccountNonce(accAddr common.Address, pending bool, height int64, logger log.Logger) (uint64, error) {
 	queryClient := authtypes.NewQueryClient(e.clientCtx)
-	res, err := queryClient.Account(types.ContextWithHeight(height), &authtypes.QueryAccountRequest{Address: sdk.AccAddress(accAddr.Bytes()).String()})
+	cosmosRequest := evmtypes.QueryMappedCosmosAddressRequest{EvmAddress: accAddr.Hex()}
+	cosmosAddress, err := e.queryClient.MappedCosmosAddress(e.ctx, &cosmosRequest)
+	if err != nil {
+		return 0, err
+	}
+	res, err := queryClient.Account(types.ContextWithHeight(height), &authtypes.QueryAccountRequest{Address: cosmosAddress.CosmosAddress})
 	if err != nil {
 		return 0, err
 	}

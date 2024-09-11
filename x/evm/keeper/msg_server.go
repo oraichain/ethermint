@@ -86,3 +86,65 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 
 	return response, nil
 }
+
+func (k *Keeper) SetMappingEvmAddress(
+	goCtx context.Context,
+	msg *types.MsgSetMappingEvmAddress,
+) (*types.MsgSetMappingEvmAddressResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	signer, err := sdk.AccAddressFromBech32(msg.Signer)
+	if err != nil {
+		return nil, sdkerrors.Wrap(sdkerrors.ErrorInvalidSigner, fmt.Sprintf("invalid signer address: %s", err.Error()))
+	}
+
+	_, err = k.GetEvmAddressMapping(ctx, signer)
+	if err == nil {
+		// no-op since there's already a mapping
+		return &types.MsgSetMappingEvmAddressResponse{}, nil
+	}
+
+	// already checked at validateBasic, but double check here to make sure
+	cosmosAddress, err := types.PubkeyToCosmosAddress(msg.Pubkey)
+	if err != nil {
+		return nil, err
+	}
+	if msg.Signer != cosmosAddress.String() {
+		return nil, sdkerrors.Wrap(
+			sdkerrors.ErrInvalidPubKey,
+			"Signer does not match the given pubkey",
+		)
+	}
+
+	evmAddress, err := types.PubkeyToEVMAddress(msg.Pubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	k.SetAddressMapping(ctx, signer, *evmAddress)
+	err = k.MigrateNonce(ctx, *evmAddress, cosmosAddress)
+	if err != nil {
+		return nil, err
+	}
+	err = k.MigrateBalance(ctx, *evmAddress, cosmosAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeSetMappingEvmAddress,
+		sdk.NewAttribute(types.AttributeKeyCosmosAddress, msg.Signer),
+		sdk.NewAttribute(types.AttributeKeyEvmAddress, evmAddress.Hex()),
+		sdk.NewAttribute(types.AttributeKeyPubkey, msg.Pubkey),
+	))
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			sdk.EventTypeMessage,
+			sdk.NewAttribute(sdk.AttributeKeyModule, types.AttributeValueCategory),
+			sdk.NewAttribute(sdk.AttributeKeySender, msg.Signer),
+		),
+	)
+
+	return &types.MsgSetMappingEvmAddressResponse{}, nil
+}

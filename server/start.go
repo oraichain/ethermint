@@ -14,12 +14,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 
 	"google.golang.org/grpc"
 
 	abciserver "github.com/tendermint/tendermint/abci/server"
-	tcmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
+	tcmd "github.com/tendermint/tendermint/cmd/cometbft/commands"
 	tmos "github.com/tendermint/tendermint/libs/os"
 	"github.com/tendermint/tendermint/node"
 	"github.com/tendermint/tendermint/p2p"
@@ -39,16 +40,34 @@ import (
 	servergrpc "github.com/cosmos/cosmos-sdk/server/grpc"
 	"github.com/cosmos/cosmos-sdk/server/types"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	ethdebug "github.com/tharsis/ethermint/rpc/ethereum/namespaces/debug"
 	"github.com/tharsis/ethermint/server/config"
 	srvflags "github.com/tharsis/ethermint/server/flags"
 )
 
+// DBOpener is a function to open `application.db`, potentially with customized options.
+type DBOpener func(opts types.AppOptions, rootDir string, backend dbm.BackendType) (dbm.DB, error)
+
+// StartOptions defines options that can be customized in `StartCmd`
+type StartOptions struct {
+	AppCreator      types.AppCreator
+	DefaultNodeHome string
+	DBOpener        DBOpener
+}
+
+// NewDefaultStartOptions use the default db opener provided in tm-db.
+func NewDefaultStartOptions(appCreator types.AppCreator, defaultNodeHome string) StartOptions {
+	return StartOptions{
+		AppCreator:      appCreator,
+		DefaultNodeHome: defaultNodeHome,
+		DBOpener:        openDB,
+	}
+}
+
 // StartCmd runs the service passed in, either stand-alone or in-process with
 // Tendermint.
-func StartCmd(appCreator types.AppCreator, defaultNodeHome string) *cobra.Command {
+func StartCmd(opts StartOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Run the full node",
@@ -97,7 +116,7 @@ which accepts a path for the resulting pprof file.
 			withTM, _ := cmd.Flags().GetBool(srvflags.WithTendermint)
 			if !withTM {
 				serverCtx.Logger.Info("starting ABCI without Tendermint")
-				return startStandAlone(serverCtx, appCreator)
+				return startStandAlone(serverCtx, opts)
 			}
 
 			serverCtx.Logger.Info("Unlocking keyring")
@@ -114,7 +133,7 @@ which accepts a path for the resulting pprof file.
 			serverCtx.Logger.Info("starting ABCI with Tendermint")
 
 			// amino is needed here for backwards compatibility of REST routes
-			err = startInProcess(serverCtx, clientCtx, appCreator)
+			err = startInProcess(serverCtx, clientCtx, opts)
 			errCode, ok := err.(server.ErrorCode)
 			if !ok {
 				return err
@@ -125,7 +144,7 @@ which accepts a path for the resulting pprof file.
 		},
 	}
 
-	cmd.Flags().String(flags.FlagHome, defaultNodeHome, "The application home directory")
+	cmd.Flags().String(flags.FlagHome, opts.DefaultNodeHome, "The application home directory")
 	cmd.Flags().Bool(srvflags.WithTendermint, true, "Run abci app embedded in-process with tendermint")
 	cmd.Flags().String(srvflags.Address, "tcp://0.0.0.0:26658", "Listen address")
 	cmd.Flags().String(srvflags.Transport, "socket", "Transport protocol: socket, grpc")
@@ -179,12 +198,12 @@ which accepts a path for the resulting pprof file.
 	return cmd
 }
 
-func startStandAlone(ctx *server.Context, appCreator types.AppCreator) error {
+func startStandAlone(ctx *server.Context, opts StartOptions) error {
 	addr := ctx.Viper.GetString(srvflags.Address)
 	transport := ctx.Viper.GetString(srvflags.Transport)
 	home := ctx.Viper.GetString(flags.FlagHome)
 
-	db, err := openDB(home)
+	db, err := opts.DBOpener(ctx.Viper, home, getAppDBBackend(ctx.Viper))
 	if err != nil {
 		return err
 	}
@@ -200,7 +219,7 @@ func startStandAlone(ctx *server.Context, appCreator types.AppCreator) error {
 		return err
 	}
 
-	app := appCreator(ctx.Logger, db, traceWriter, ctx.Viper)
+	app := opts.AppCreator(ctx.Logger, db, traceWriter, ctx.Viper)
 
 	svr, err := abciserver.NewServer(addr, transport, app)
 	if err != nil {
@@ -225,7 +244,7 @@ func startStandAlone(ctx *server.Context, appCreator types.AppCreator) error {
 }
 
 // legacyAminoCdc is used for the legacy REST API
-func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator types.AppCreator) (err error) {
+func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOptions) (err error) {
 	cfg := ctx.Config
 	home := cfg.RootDir
 	logger := ctx.Logger
@@ -259,7 +278,8 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	}
 
 	traceWriterFile := ctx.Viper.GetString(srvflags.TraceStore)
-	db, err := openDB(home)
+
+	db, err := opts.DBOpener(ctx.Viper, home, getAppDBBackend(ctx.Viper))
 	if err != nil {
 		logger.Error("failed to open DB", "error", err.Error())
 		return err
@@ -276,25 +296,37 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 		return err
 	}
 
-	config, err := config.GetConfig(ctx.Viper)
+	appConfig, err := config.GetConfig(ctx.Viper)
 	if err != nil {
 		logger.Error("failed to get config", "error", err.Error())
 		return err
 	}
 
-	if err := config.ValidateBasic(); err != nil {
+	if err := appConfig.ValidateBasic(); err != nil {
 		if strings.Contains(err.Error(), "set min gas price in app.toml or flag or env variable") {
 			ctx.Logger.Error(
 				"WARNING: The minimum-gas-prices config in app.toml is set to the empty string. " +
 					"This defaults to 0 in the current version, but will error in the next version " +
 					"(SDK v0.44). Please explicitly put the desired minimum-gas-prices in your app.toml.",
 			)
+		} else if strings.Contains(err.Error(), "invalid ethermint") {
+			home := ctx.Viper.GetString(flags.FlagHome)
+			appConfigPath := filepath.Join(home, "config/app.toml")
+			ctx.Logger.Info(
+				"This node does not have ethermint configurations. Applying the default values to " + appConfigPath,
+			)
+			appConfigTemplate, defaultAppConfig := config.AppConfig("")
+			appConfig.EVM = defaultAppConfig.EVM
+			appConfig.JSONRPC = defaultAppConfig.JSONRPC
+			appConfig.TLS = defaultAppConfig.TLS
+			// overwrite the config file with new values
+			serverconfig.SetConfigTemplate(appConfigTemplate)
+			serverconfig.WriteConfigFile(appConfigPath, appConfig)
 		} else {
 			return err
 		}
 	}
-
-	app := appCreator(ctx.Logger, db, traceWriter, ctx.Viper)
+	app := opts.AppCreator(ctx.Logger, db, traceWriter, ctx.Viper)
 
 	nodeKey, err := p2p.LoadOrGenNodeKey(cfg.NodeKeyFile())
 	if err != nil {
@@ -326,7 +358,7 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	// Add the tx service to the gRPC router. We only need to register this
 	// service if API or gRPC or JSONRPC is enabled, and avoid doing so in the general
 	// case, because it spawns a new local tendermint RPC client.
-	if config.API.Enable || config.GRPC.Enable || config.JSONRPC.Enable {
+	if appConfig.API.Enable || appConfig.GRPC.Enable || appConfig.JSONRPC.Enable {
 		clientCtx = clientCtx.WithClient(local.New(tmNode))
 
 		app.RegisterTxService(clientCtx)
@@ -334,7 +366,7 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	}
 
 	var apiSrv *api.Server
-	if config.API.Enable {
+	if appConfig.API.Enable {
 		genDoc, err := genDocProvider()
 		if err != nil {
 			return err
@@ -345,11 +377,11 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 			WithChainID(genDoc.ChainID)
 
 		apiSrv = api.New(clientCtx, ctx.Logger.With("server", "api"))
-		app.RegisterAPIRoutes(apiSrv, config.API)
+		app.RegisterAPIRoutes(apiSrv, appConfig.API)
 		errCh := make(chan error)
 
 		go func() {
-			if err := apiSrv.Start(config.Config); err != nil {
+			if err := apiSrv.Start(appConfig.Config); err != nil {
 				errCh <- err
 			}
 		}()
@@ -365,13 +397,13 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 		grpcSrv    *grpc.Server
 		grpcWebSrv *http.Server
 	)
-	if config.GRPC.Enable {
-		grpcSrv, err = servergrpc.StartGRPCServer(clientCtx, app, config.GRPC.Address)
+	if appConfig.GRPC.Enable {
+		grpcSrv, err = servergrpc.StartGRPCServer(clientCtx, app, appConfig.GRPC.Address)
 		if err != nil {
 			return err
 		}
-		if config.GRPCWeb.Enable {
-			grpcWebSrv, err = servergrpc.StartGRPCWeb(grpcSrv, config.Config)
+		if appConfig.GRPCWeb.Enable {
+			grpcWebSrv, err = servergrpc.StartGRPCWeb(grpcSrv, appConfig.Config)
 			if err != nil {
 				ctx.Logger.Error("failed to start grpc-web http server", "error", err)
 				return err
@@ -380,19 +412,19 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	}
 
 	var rosettaSrv crgserver.Server
-	if config.Rosetta.Enable {
-		offlineMode := config.Rosetta.Offline
-		if !config.GRPC.Enable { // If GRPC is not enabled rosetta cannot work in online mode, so it works in offline mode.
+	if appConfig.Rosetta.Enable {
+		offlineMode := appConfig.Rosetta.Offline
+		if !appConfig.GRPC.Enable { // If GRPC is not enabled rosetta cannot work in online mode, so it works in offline mode.
 			offlineMode = true
 		}
 
 		conf := &rosetta.Config{
-			Blockchain:    config.Rosetta.Blockchain,
-			Network:       config.Rosetta.Network,
+			Blockchain:    appConfig.Rosetta.Blockchain,
+			Network:       appConfig.Rosetta.Network,
 			TendermintRPC: ctx.Config.RPC.ListenAddress,
-			GRPCEndpoint:  config.GRPC.Address,
-			Addr:          config.Rosetta.Address,
-			Retries:       config.Rosetta.Retries,
+			GRPCEndpoint:  appConfig.GRPC.Address,
+			Addr:          appConfig.Rosetta.Address,
+			Retries:       appConfig.Rosetta.Retries,
 			Offline:       offlineMode,
 		}
 		conf.WithCodec(clientCtx.InterfaceRegistry, clientCtx.Codec.(*codec.ProtoCodec))
@@ -420,7 +452,7 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 		httpSrvDone chan struct{}
 	)
 
-	if config.JSONRPC.Enable {
+	if appConfig.JSONRPC.Enable {
 		genDoc, err := genDocProvider()
 		if err != nil {
 			return err
@@ -430,7 +462,7 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 
 		tmEndpoint := "/websocket"
 		tmRPCAddr := cfg.RPC.ListenAddress
-		httpSrv, httpSrvDone, err = StartJSONRPC(ctx, clientCtx, tmRPCAddr, tmEndpoint, config)
+		httpSrv, httpSrvDone, err = StartJSONRPC(ctx, clientCtx, tmRPCAddr, tmEndpoint, appConfig)
 		if err != nil {
 			return err
 		}
@@ -480,9 +512,9 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, appCreator ty
 	return server.WaitForQuitSignals()
 }
 
-func openDB(rootDir string) (dbm.DB, error) {
+func openDB(_ types.AppOptions, rootDir string, backendType dbm.BackendType) (dbm.DB, error) {
 	dataDir := filepath.Join(rootDir, "data")
-	return sdk.NewLevelDB("application", dataDir)
+	return dbm.NewDB("application", backendType, dataDir)
 }
 
 func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
@@ -496,4 +528,18 @@ func openTraceWriter(traceWriterFile string) (w io.Writer, err error) {
 		os.O_WRONLY|os.O_APPEND|os.O_CREATE,
 		0o600,
 	)
+}
+
+// getAppDBBackend gets the backend type to use for the application DBs.
+// NOTE: getAppDBBackend is backported from newer versions of cosmos-sdk
+func getAppDBBackend(opts types.AppOptions) dbm.BackendType {
+	rv := cast.ToString(opts.Get("app-db-backend"))
+	if len(rv) == 0 {
+		rv = cast.ToString(opts.Get("db_backend"))
+	}
+	if len(rv) != 0 {
+		return dbm.BackendType(rv)
+	}
+
+	return dbm.GoLevelDBBackend
 }
