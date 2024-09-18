@@ -1,7 +1,6 @@
 package ante
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/legacy/legacytx"
 	authsigning "github.com/cosmos/cosmos-sdk/x/auth/signing"
 
+	"github.com/ethereum/go-ethereum/common"
 	ethcrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/tharsis/ethermint/crypto/ethsecp256k1"
@@ -144,7 +144,7 @@ func (svd Eip712SigVerificationDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx,
 	}
 
 	evmParams := svd.evmKeeper.GetParams(ctx)
-	if err := VerifySignature(pubKey, signerData, sig.Data, svd.signModeHandler, authSignTx, evmParams); err != nil {
+	if err := svd.verifySignature(ctx, pubKey, signerData, sig.Data, svd.signModeHandler, authSignTx, evmParams); err != nil {
 		errMsg := fmt.Errorf("signature verification failed; please verify account number (%d) and chain-id (%s): %w", accNum, chainID, err)
 		return ctx, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, errMsg.Error())
 	}
@@ -239,9 +239,10 @@ func (spkd SetPubKeyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate b
 	return next(ctx, tx, simulate)
 }
 
-// VerifySignature verifies a transaction signature contained in SignatureData abstracting over different signing modes
+// verifySignature verifies a transaction signature contained in SignatureData abstracting over different signing modes
 // and single vs multi-signatures.
-func VerifySignature(
+func (svd Eip712SigVerificationDecorator) verifySignature(
+	ctx sdk.Context,
 	pubKey cryptotypes.PubKey,
 	signerData authsigning.SignerData,
 	sigData signing.SignatureData,
@@ -360,13 +361,14 @@ func VerifySignature(
 			return sdkerrors.Wrapf(sdkerrors.ErrInvalidPubKey, "feePayer pubkey %s is different from transaction eth pubkey %s and cosmos pubkey%s", pubKey, ethPk, cosmosPk)
 		}
 
-		recoveredFeePayerAcc := sdk.AccAddress(ethPk.Address().Bytes())
-		if bytes.Equal(pubKey.Bytes(), cosmosPk.Key) {
+		evmAddressFromEthPk := ethPk.Address().Bytes()
+		recoveredFeePayerAcc := svd.evmKeeper.GetCosmosAddressMapping(ctx, common.BytesToAddress(evmAddressFromEthPk))
+		if pubKey.Type() == cosmosPk.Type() {
 			recoveredFeePayerAcc = sdk.AccAddress(cosmosPk.Address().Bytes())
 		}
 
 		if !recoveredFeePayerAcc.Equals(feePayer) {
-			return sdkerrors.Wrapf(sdkerrors.ErrorInvalidSigner, "failed to verify delegated fee payer %s signature", recoveredFeePayerAcc)
+			return sdkerrors.Wrapf(sdkerrors.ErrorInvalidSigner, "failed to verify delegated fee payer %s signature. Fee payer: %s; cosmosPk Address: %s", recoveredFeePayerAcc, feePayer, sdk.AccAddress(cosmosPk.Address().Bytes()))
 		}
 
 		// VerifySignature of ethsecp256k1 accepts 64 byte signature [R||S]
