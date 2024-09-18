@@ -340,6 +340,68 @@ func (k Keeper) AddTransientGasUsed(ctx sdk.Context, gasUsed uint64) (uint64, er
 	return result, nil
 }
 
+func (k Keeper) SetMappingEvmAddressInner(
+	ctx sdk.Context,
+	msgSigner string,
+	msgPubKey string,
+) error {
+
+	signer, err := sdk.AccAddressFromBech32(msgSigner)
+	if err != nil {
+		return sdkerrors.Wrap(sdkerrors.ErrorInvalidSigner, fmt.Sprintf("invalid signer address: %s", err.Error()))
+	}
+
+	_, err = k.GetEvmAddressMapping(ctx, signer)
+	if err == nil {
+		// no-op since there's already a mapping
+		return nil
+	}
+
+	// already checked at validateBasic, but double check here to make sure
+	cosmosAddress, err := types.PubkeyToCosmosAddress(msgPubKey)
+	if err != nil {
+		return err
+	}
+	if msgSigner != cosmosAddress.String() {
+		return sdkerrors.Wrap(
+			sdkerrors.ErrInvalidPubKey,
+			"Signer does not match the given pubkey",
+		)
+	}
+
+	evmAddress, err := types.PubkeyToEVMAddress(msgPubKey)
+	if err != nil {
+		return err
+	}
+
+	k.SetAddressMapping(ctx, signer, *evmAddress)
+	err = k.MigrateNonce(ctx, *evmAddress, cosmosAddress)
+	if err != nil {
+		return err
+	}
+	err = k.MigrateBalance(ctx, *evmAddress, cosmosAddress)
+	if err != nil {
+		return err
+	}
+
+	ctx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeSetMappingEvmAddress,
+		sdk.NewAttribute(types.AttributeKeyCosmosAddress, msgSigner),
+		sdk.NewAttribute(types.AttributeKeyEvmAddress, evmAddress.Hex()),
+		sdk.NewAttribute(types.AttributeKeyPubkey, msgPubKey),
+	))
+
+	ctx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			sdk.EventTypeMessage,
+			sdk.NewAttribute(sdk.AttributeKeyModule, types.AttributeValueCategory),
+			sdk.NewAttribute(sdk.AttributeKeySender, msgSigner),
+		),
+	)
+
+	return nil
+}
+
 // GetEvmAddressMapping returns the account for a given address.
 func (k Keeper) GetEvmAddressMapping(ctx sdk.Context, addr sdk.AccAddress) (*common.Address, error) {
 	store := ctx.KVStore(k.storeKey)
