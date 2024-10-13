@@ -132,6 +132,9 @@ which accepts a path for the resulting pprof file.
 
 			serverCtx.Logger.Info("starting ABCI with Tendermint")
 
+			chainID, _ := cmd.Flags().GetString(flags.FlagChainID)
+			clientCtx = clientCtx.WithChainID(chainID)
+
 			// amino is needed here for backwards compatibility of REST routes
 			err = startInProcess(serverCtx, clientCtx, opts)
 			errCode, ok := err.(server.ErrorCode)
@@ -189,6 +192,7 @@ which accepts a path for the resulting pprof file.
 
 	cmd.Flags().String(srvflags.TLSCertPath, "", "the cert.pem file path for the server TLS configuration")
 	cmd.Flags().String(srvflags.TLSKeyPath, "", "the key.pem file path for the server TLS configuration")
+	cmd.Flags().String(srvflags.ChainID, "", "Network's chain ID")
 
 	cmd.Flags().Uint64(server.FlagStateSyncSnapshotInterval, 0, "State sync snapshot interval")
 	cmd.Flags().Uint32(server.FlagStateSyncSnapshotKeepRecent, 2, "State sync snapshot to keep")
@@ -354,6 +358,7 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOpt
 		logger.Error("failed start tendermint server", "error", err.Error())
 		return err
 	}
+	chainID := clientCtx.ChainID
 
 	// Add the tx service to the gRPC router. We only need to register this
 	// service if API or gRPC or JSONRPC is enabled, and avoid doing so in the general
@@ -367,14 +372,17 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOpt
 
 	var apiSrv *api.Server
 	if appConfig.API.Enable {
-		genDoc, err := genDocProvider()
-		if err != nil {
-			return err
+		if chainID == "" {
+			genDoc, err := genDocProvider()
+			if err != nil {
+				return err
+			}
+			chainID = genDoc.ChainID
 		}
 
 		clientCtx := clientCtx.
 			WithHomeDir(home).
-			WithChainID(genDoc.ChainID)
+			WithChainID(chainID)
 
 		apiSrv = api.New(clientCtx, ctx.Logger.With("server", "api"))
 		app.RegisterAPIRoutes(apiSrv, appConfig.API)
@@ -453,12 +461,15 @@ func startInProcess(ctx *server.Context, clientCtx client.Context, opts StartOpt
 	)
 
 	if appConfig.JSONRPC.Enable {
-		genDoc, err := genDocProvider()
-		if err != nil {
-			return err
+		if chainID == "" {
+			genDoc, err := genDocProvider()
+			if err != nil {
+				return err
+			}
+			chainID = genDoc.ChainID
 		}
 
-		clientCtx := clientCtx.WithChainID(genDoc.ChainID)
+		clientCtx := clientCtx.WithChainID(chainID)
 
 		tmEndpoint := "/websocket"
 		tmRPCAddr := cfg.RPC.ListenAddress

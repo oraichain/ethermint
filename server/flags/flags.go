@@ -14,6 +14,7 @@ const (
 	Transport      = "transport"
 	TraceStore     = "trace-store"
 	CPUProfile     = "cpu-profile"
+	ChainID        = "chain-id"
 )
 
 // GRPC-related flags.
